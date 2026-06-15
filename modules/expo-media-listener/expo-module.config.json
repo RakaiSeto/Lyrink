@@ -1,0 +1,13 @@
+{
+  "platforms": ["android"],
+  "android": {
+    "modules": ["expo.modules.medialistener.ExpoMediaListenerModule"],
+    "namespace": "expo.modules.medialistener",
+    "defaultConfig": {
+      "minSdkVersion": "rootProject.ext.minSdkVersion",
+      "targetSdkVersion": "rootProject.ext.targetSdkVersion",
+      "versionCode": 1,
+      "versionName": "1.0.0"
+    }
+  }
+}
