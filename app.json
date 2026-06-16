@@ -30,13 +30,15 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#0A0F30",
           "android": {
             "image": "./assets/images/splash-icon.png",
-            "imageWidth": 76
+            "imageWidth": 120
           }
         }
-      ]
+      ],
+      "./plugins/withMediaListener",
+      "./plugins/withReactNativeArchitectures"
     ],
     "experiments": {
       "typedRoutes": true,
