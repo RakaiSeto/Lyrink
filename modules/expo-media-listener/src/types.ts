@@ -3,6 +3,7 @@ export type MediaMetadata = {
   artist: string | null;
   album: string | null;
   albumArtUri: string | null;
+  albumArtBase64: string | null;
   isPlaying: boolean;
   packageName: string | null;
   rawNotificationJson: string | null;

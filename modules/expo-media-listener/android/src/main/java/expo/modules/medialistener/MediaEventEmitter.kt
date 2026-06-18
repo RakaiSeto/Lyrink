@@ -5,6 +5,7 @@ data class MediaMetadata(
   val artist: String? = null,
   val album: String? = null,
   val albumArtUri: String? = null,
+  val albumArtBase64: String? = null,
   val isPlaying: Boolean = false,
   val packageName: String? = null,
   val rawNotificationJson: String? = null,

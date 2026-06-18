@@ -3,13 +3,16 @@ package expo.modules.medialistener
 import android.app.Notification
 import android.content.ComponentName
 import android.content.Context
+import android.graphics.Bitmap
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.Bundle
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.util.Base64
 import android.util.Log
+import java.io.ByteArrayOutputStream
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -109,11 +112,14 @@ class MediaNotificationListenerService : NotificationListenerService() {
     val meta = controller?.metadata ?: return
     val state = controller.playbackState
 
+    val albumArtBitmap = meta.getBitmap("android.media.metadata.ALBUM_ART")
+
     val mm = MediaMetadata(
       title = meta.getString("android.media.metadata.TITLE"),
       artist = meta.getString("android.media.metadata.ARTIST"),
       album = meta.getString("android.media.metadata.ALBUM"),
       albumArtUri = meta.getString("android.media.metadata.ALBUM_ART_URI"),
+      albumArtBase64 = bitmapToBase64(albumArtBitmap),
       isPlaying = state?.state == PlaybackState.STATE_PLAYING,
       packageName = controller.packageName,
       rawNotificationJson = lastRawNotificationJson,
@@ -154,6 +160,7 @@ class MediaNotificationListenerService : NotificationListenerService() {
     val mediaArtist = extras.getString("android.media.metadata.ARTIST")
     val mediaAlbum = extras.getString("android.media.metadata.ALBUM")
     val mediaAlbumArt = extras.getString("android.media.metadata.ALBUM_ART_URI")
+    val mediaAlbumArtBitmap = extras.getParcelable<Bitmap>(Notification.EXTRA_PICTURE)
     val mediaDuration = extras.getLong("android.media.metadata.DURATION", 0L)
 
     val isPlaying = detectPlayingState(notification)
@@ -164,6 +171,7 @@ class MediaNotificationListenerService : NotificationListenerService() {
       artist = mediaArtist ?: artist ?: subText,
       album = mediaAlbum,
       albumArtUri = mediaAlbumArt,
+      albumArtBase64 = bitmapToBase64(mediaAlbumArtBitmap),
       isPlaying = isPlaying,
       packageName = YT_MUSIC_PACKAGE,
       duration = mediaDuration,
@@ -267,6 +275,19 @@ class MediaNotificationListenerService : NotificationListenerService() {
       is CharSequence -> value.toString()
       is String -> value
       else -> null
+    }
+  }
+
+  private fun bitmapToBase64(bitmap: Bitmap?): String? {
+    if (bitmap == null) return null
+    return try {
+      val stream = ByteArrayOutputStream()
+      bitmap.compress(Bitmap.CompressFormat.JPEG, 85, stream)
+      val bytes = stream.toByteArray()
+      Base64.encodeToString(bytes, Base64.NO_WRAP)
+    } catch (e: Exception) {
+      Log.e(TAG, "Failed to convert bitmap to base64", e)
+      null
     }
   }
 }
