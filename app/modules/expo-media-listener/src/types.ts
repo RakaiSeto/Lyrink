@@ -26,6 +26,10 @@ export type ModuleDefinition = {
   requestPermission(): void;
   isPermissionGranted(): Promise<boolean>;
   getCurrentMetadata(): Promise<MediaMetadata | null>;
+  startForegroundService(): void;
+  stopForegroundService(): void;
+  isForegroundServiceRunning(): Promise<boolean>;
+  isNotificationPermissionGranted(): Promise<boolean>;
   addListener(eventName: string): void;
   removeListeners(count: number): void;
 };

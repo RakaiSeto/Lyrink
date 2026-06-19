@@ -8,6 +8,9 @@ import {
   requestPermission,
   startListening,
   stopListening,
+  startForegroundService,
+  stopForegroundService,
+  isForegroundServiceRunning,
 } from '../../modules/expo-media-listener/src/index';
 
 import type { MediaMetadata } from '../../modules/expo-media-listener/src/types';
@@ -15,6 +18,7 @@ import type { MediaMetadata } from '../../modules/expo-media-listener/src/types'
 export function useMediaMetadata() {
   const [metadata, setMetadata] = useState<MediaMetadata | null>(null);
   const [permissionGranted, setPermissionGranted] = useState(false);
+  const [serviceRunning, setServiceRunning] = useState(false);
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;
@@ -26,6 +30,8 @@ export function useMediaMetadata() {
         startListening();
       }
     });
+
+    isForegroundServiceRunning().then(setServiceRunning);
 
     const removeListener = addMediaMetadataListener((data) => {
       setMetadata(data);
@@ -52,11 +58,26 @@ export function useMediaMetadata() {
     }
   }, []);
 
+  const toggleService = useCallback(async () => {
+    if (Platform.OS !== 'android') return;
+
+    const running = await isForegroundServiceRunning();
+    if (running) {
+      stopForegroundService();
+      setServiceRunning(false);
+    } else {
+      startForegroundService();
+      setServiceRunning(true);
+    }
+  }, []);
+
   return {
     metadata,
     permissionGranted,
     isListening: Platform.OS === 'android' && permissionGranted,
+    serviceRunning,
     openSettings,
     refresh,
+    toggleService,
   };
 }

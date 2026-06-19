@@ -38,7 +38,7 @@ function formatTime(ms: number): string {
 }
 
 function NowPlayingCard() {
-  const { metadata, permissionGranted, openSettings, isListening } =
+  const { metadata, permissionGranted, openSettings, isListening, serviceRunning, toggleService } =
     useMediaMetadata();
 
   const [displayPosition, setDisplayPosition] = useState(0);
@@ -79,8 +79,8 @@ function NowPlayingCard() {
         <ThemedText style={styles.permissionText}>
           Enable notification access to detect YouTube Music
         </ThemedText>
-        <Pressable style={styles.permissionButton} onPress={openSettings}>
-          <ThemedText style={styles.permissionButtonText}>
+        <Pressable style={styles.primaryButton} onPress={openSettings}>
+          <ThemedText style={styles.primaryButtonText}>
             Open Settings
           </ThemedText>
         </Pressable>
@@ -99,80 +99,99 @@ function NowPlayingCard() {
     );
   }
 
-  if (!metadata || !metadata.title) {
-    return (
-      <ThemedView type="backgroundElement" style={styles.nowPlayingCard}>
-        <ThemedText type="subtitle" style={styles.sectionTitle}>
-          Now Playing
-        </ThemedText>
-        <ThemedText>No music detected</ThemedText>
-      </ThemedView>
-    );
-  }
-
   return (
     <ThemedView type="backgroundElement" style={styles.nowPlayingCard}>
-      <ThemedView style={styles.songRow}>
-        {metadata.albumArtBase64 ? (
-          <Image source={{ uri: `data:image/jpeg;base64,${metadata.albumArtBase64}` }} style={styles.albumArt} />
-        ) : metadata.albumArtUri ? (
-          <Image source={{ uri: metadata.albumArtUri }} style={styles.albumArt} />
-        ) : (
-          <ThemedView style={[styles.albumArt, styles.albumArtPlaceholder]}>
-            <ThemedText type="title" style={styles.albumArtText}>
-              ♪
-            </ThemedText>
-          </ThemedView>
-        )}
-
-        <ThemedView style={styles.songInfo}>
-          {metadata.album && (
-            <ThemedView style={styles.albumLabel}>
-              <ThemedText type="small" style={styles.albumLabelText}>
-                ♪ {metadata.album.toUpperCase()}
-              </ThemedText>
-            </ThemedView>
-          )}
-          <ThemedText style={styles.songTitle}>
-            {metadata.title}
+      <ThemedView style={styles.serviceRow}>
+        <ThemedView style={styles.serviceStatus}>
+          <ThemedView style={[styles.statusDot, serviceRunning && styles.statusDotActive]} />
+          <ThemedText type="small" style={styles.serviceLabel}>
+            {serviceRunning ? 'Active' : 'Inactive'}
           </ThemedText>
-          {metadata.artist && (
-            <ThemedView style={styles.artistRow}>
-              <ThemedText type="small" style={styles.artistIcon}>
-                •
-              </ThemedText>
-              <ThemedText type="small">
-                {metadata.artist}
-              </ThemedText>
-            </ThemedView>
-          )}
-          <ThemedView style={styles.statusRow}>
-            <ThemedText style={[styles.statusIcon, metadata.isPlaying && styles.statusIconPlaying]}>
-              {metadata.isPlaying ? '▸' : '‖'}
-            </ThemedText>
-            <ThemedText type="small">
-              {metadata.isPlaying ? 'Playing' : 'Paused'}
-            </ThemedText>
-          </ThemedView>
         </ThemedView>
+        <Pressable
+          style={[styles.toggleButton, serviceRunning && styles.toggleButtonActive]}
+          onPress={toggleService}
+        >
+          <ThemedText style={styles.toggleButtonText}>
+            {serviceRunning ? 'Stop' : 'Start'}
+          </ThemedText>
+        </Pressable>
       </ThemedView>
 
-      {metadata.playbackState && metadata.duration > 0 && (
-        <View style={styles.progressSection}>
-          <View style={styles.progressRow}>
-            <ThemedText type="small" style={styles.progressTime}>
-              {formatTime(displayPosition)}
-            </ThemedText>
-            <View style={styles.progressTrack}>
-              <View
-                style={[styles.progressFill, { width: `${progress * 100}%` }]}
-              />
+      {metadata && metadata.title ? (
+        <>
+          <ThemedView style={styles.songRow}>
+            {metadata.albumArtBase64 ? (
+              <Image source={{ uri: `data:image/jpeg;base64,${metadata.albumArtBase64}` }} style={styles.albumArt} />
+            ) : metadata.albumArtUri ? (
+              <Image source={{ uri: metadata.albumArtUri }} style={styles.albumArt} />
+            ) : (
+              <ThemedView style={[styles.albumArt, styles.albumArtPlaceholder]}>
+                <ThemedText type="title" style={styles.albumArtText}>
+                  ♪
+                </ThemedText>
+              </ThemedView>
+            )}
+
+            <ThemedView style={styles.songInfo}>
+              {metadata.album && (
+                <ThemedView style={styles.albumLabel}>
+                  <ThemedText type="small" style={styles.albumLabelText}>
+                    ♪ {metadata.album.toUpperCase()}
+                  </ThemedText>
+                </ThemedView>
+              )}
+              <ThemedText style={styles.songTitle}>
+                {metadata.title}
+              </ThemedText>
+              {metadata.artist && (
+                <ThemedView style={styles.artistRow}>
+                  <ThemedText type="small" style={styles.artistIcon}>
+                    •
+                  </ThemedText>
+                  <ThemedText type="small">
+                    {metadata.artist}
+                  </ThemedText>
+                </ThemedView>
+              )}
+              <ThemedView style={styles.statusRow}>
+                <ThemedText style={[styles.statusIcon, metadata.isPlaying && styles.statusIconPlaying]}>
+                  {metadata.isPlaying ? '▸' : '‖'}
+                </ThemedText>
+                <ThemedText type="small">
+                  {metadata.isPlaying ? 'Playing' : 'Paused'}
+                </ThemedText>
+              </ThemedView>
+            </ThemedView>
+          </ThemedView>
+
+          {metadata.playbackState && metadata.duration > 0 && (
+            <View style={styles.progressSection}>
+              <View style={styles.progressRow}>
+                <ThemedText type="small" style={styles.progressTime}>
+                  {formatTime(displayPosition)}
+                </ThemedText>
+                <View style={styles.progressTrack}>
+                  <View
+                    style={[styles.progressFill, { width: `${progress * 100}%` }]}
+                  />
+                </View>
+                <ThemedText type="small" style={styles.progressTime}>
+                  {formatTime(metadata.duration)}
+                </ThemedText>
+              </View>
             </View>
-            <ThemedText type="small" style={styles.progressTime}>
-              {formatTime(metadata.duration)}
+          )}
+        </>
+      ) : (
+        <ThemedView style={styles.noMusicContainer}>
+          <ThemedText>No music detected</ThemedText>
+          {!serviceRunning && (
+            <ThemedText type="small" style={styles.hintText}>
+              Start the service to begin syncing
             </ThemedText>
-          </View>
-        </View>
+          )}
+        </ThemedView>
       )}
     </ThemedView>
   );
@@ -237,15 +256,59 @@ const styles = StyleSheet.create({
   permissionText: {
     textAlign: 'center',
   },
-  permissionButton: {
+  primaryButton: {
     backgroundColor: '#208AEF',
     paddingVertical: Spacing.one,
     paddingHorizontal: Spacing.three,
     borderRadius: Spacing.two,
     alignSelf: 'center',
   },
-  permissionButtonText: {
+  primaryButtonText: {
     color: '#FFFFFF',
+  },
+  serviceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  serviceStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+  },
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#666',
+  },
+  statusDotActive: {
+    backgroundColor: '#34C759',
+  },
+  serviceLabel: {
+    fontWeight: 600,
+  },
+  toggleButton: {
+    backgroundColor: '#208AEF',
+    paddingVertical: Spacing.one,
+    paddingHorizontal: Spacing.three,
+    borderRadius: Spacing.two,
+  },
+  toggleButtonActive: {
+    backgroundColor: '#FF3B30',
+  },
+  toggleButtonText: {
+    color: '#FFFFFF',
+    fontWeight: 700,
+    fontSize: 14,
+  },
+  noMusicContainer: {
+    alignItems: 'center',
+    paddingVertical: Spacing.three,
+    gap: Spacing.one,
+  },
+  hintText: {
+    opacity: 0.6,
   },
   songRow: {
     flexDirection: 'row',

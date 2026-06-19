@@ -16,15 +16,30 @@ data class MediaMetadata(
 )
 
 object MediaEventEmitter {
-  var onMetadataChanged: ((MediaMetadata) -> Unit)? = null
+  private val metadataListeners = mutableListOf<(MediaMetadata) -> Unit>()
+  private val statusListeners = mutableListOf<(Boolean) -> Unit>()
 
-  fun emit(metadata: MediaMetadata) {
-    onMetadataChanged?.invoke(metadata)
+  fun addMetadataListener(listener: (MediaMetadata) -> Unit) {
+    metadataListeners.add(listener)
   }
 
-  var onListeningStatusChanged: ((Boolean) -> Unit)? = null
+  fun removeMetadataListener(listener: (MediaMetadata) -> Unit) {
+    metadataListeners.remove(listener)
+  }
+
+  fun emit(metadata: MediaMetadata) {
+    metadataListeners.forEach { it(metadata) }
+  }
+
+  fun addStatusListener(listener: (Boolean) -> Unit) {
+    statusListeners.add(listener)
+  }
+
+  fun removeStatusListener(listener: (Boolean) -> Unit) {
+    statusListeners.remove(listener)
+  }
 
   fun emitListeningStatus(isListening: Boolean) {
-    onListeningStatusChanged?.invoke(isListening)
+    statusListeners.forEach { it(isListening) }
   }
 }

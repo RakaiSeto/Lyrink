@@ -1,14 +1,22 @@
 package expo.modules.medialistener
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.provider.Settings
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
 class ExpoMediaListenerModule : Module() {
   private val context: Context
     get() = appContext.reactContext ?: throw IllegalStateException("React context unavailable")
+
+  private var metadataCallback: ((MediaMetadata) -> Unit)? = null
+  private var statusCallback: ((Boolean) -> Unit)? = null
 
   override fun definition() = ModuleDefinition {
     Name("ExpoMediaListener")
@@ -61,8 +69,49 @@ class ExpoMediaListenerModule : Module() {
       )
     }
 
+    Function("startForegroundService") {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        if (ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS
+          ) != PackageManager.PERMISSION_GRANTED
+        ) {
+          val activity = appContext.currentActivity
+          if (activity != null) {
+            ActivityCompat.requestPermissions(
+              activity,
+              arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+              1001
+            )
+          }
+        }
+      }
+      val intent = Intent(context, LyrinkForegroundService::class.java)
+      ContextCompat.startForegroundService(context, intent)
+    }
+
+    Function("stopForegroundService") {
+      val intent = Intent(context, LyrinkForegroundService::class.java)
+      context.stopService(intent)
+    }
+
+    Function("isForegroundServiceRunning") {
+      LyrinkForegroundService.isRunning
+    }
+
+    Function("isNotificationPermissionGranted") {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        ContextCompat.checkSelfPermission(
+          context,
+          Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+      } else {
+        true
+      }
+    }
+
     OnCreate {
-      MediaEventEmitter.onMetadataChanged = { metadata ->
+      metadataCallback = { metadata ->
         sendEvent("onMediaMetadataChanged", mapOf(
           "title" to metadata.title,
           "artist" to metadata.artist,
@@ -78,14 +127,19 @@ class ExpoMediaListenerModule : Module() {
           "rawPlaybackStateJson" to metadata.rawPlaybackStateJson
         ))
       }
-      MediaEventEmitter.onListeningStatusChanged = { isListening ->
+      metadataCallback?.let { MediaEventEmitter.addMetadataListener(it) }
+
+      statusCallback = { isListening ->
         sendEvent("onListeningStatusChanged", mapOf("isListening" to isListening))
       }
+      statusCallback?.let { MediaEventEmitter.addStatusListener(it) }
     }
 
     OnDestroy {
-      MediaEventEmitter.onMetadataChanged = null
-      MediaEventEmitter.onListeningStatusChanged = null
+      metadataCallback?.let { MediaEventEmitter.removeMetadataListener(it) }
+      metadataCallback = null
+      statusCallback?.let { MediaEventEmitter.removeStatusListener(it) }
+      statusCallback = null
     }
   }
 }

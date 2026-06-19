@@ -36,6 +36,26 @@ export async function getCurrentMetadata(): Promise<MediaMetadata | null> {
   return ExpoMediaListener.getCurrentMetadata();
 }
 
+export function startForegroundService(): void {
+  if (Platform.OS !== 'android') return;
+  ExpoMediaListener.startForegroundService();
+}
+
+export function stopForegroundService(): void {
+  if (Platform.OS !== 'android') return;
+  ExpoMediaListener.stopForegroundService();
+}
+
+export async function isForegroundServiceRunning(): Promise<boolean> {
+  if (Platform.OS !== 'android') return false;
+  return ExpoMediaListener.isForegroundServiceRunning();
+}
+
+export async function isNotificationPermissionGranted(): Promise<boolean> {
+  if (Platform.OS !== 'android') return true;
+  return ExpoMediaListener.isNotificationPermissionGranted();
+}
+
 export function addMediaMetadataListener(
   listener: (metadata: MediaMetadata) => void
 ): () => void {
