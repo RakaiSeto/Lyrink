@@ -1,5 +1,6 @@
 import * as Device from 'expo-device';
-import { Image, Platform, Pressable, StyleSheet } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Image, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedIcon } from '@/components/animated-icon';
@@ -29,9 +30,43 @@ function getDevMenuHint() {
   );
 }
 
+function formatTime(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
 function NowPlayingCard() {
   const { metadata, permissionGranted, openSettings, isListening } =
     useMediaMetadata();
+
+  const [displayPosition, setDisplayPosition] = useState(0);
+  const lastNativeRef = useRef({ position: 0, timestamp: Date.now() });
+
+  useEffect(() => {
+    if (!metadata) return;
+    lastNativeRef.current = {
+      position: metadata.playbackPosition,
+      timestamp: Date.now(),
+    };
+    setDisplayPosition(metadata.playbackPosition);
+  }, [metadata?.playbackPosition, metadata?.isPlaying]);
+
+  useEffect(() => {
+    if (!metadata?.isPlaying || !metadata.duration) return;
+    const interval = setInterval(() => {
+      const { position, timestamp } = lastNativeRef.current;
+      const elapsed = Date.now() - timestamp;
+      const newPos = Math.min(position + elapsed, metadata.duration);
+      setDisplayPosition(newPos);
+    }, 500);
+    return () => clearInterval(interval);
+  }, [metadata?.isPlaying, metadata?.duration]);
+
+  const progress = metadata?.duration
+    ? Math.min(displayPosition / metadata.duration, 1)
+    : 0;
 
   if (Platform.OS !== 'android') return null;
 
@@ -77,12 +112,10 @@ function NowPlayingCard() {
 
   return (
     <ThemedView type="backgroundElement" style={styles.nowPlayingCard}>
-      <ThemedText type="subtitle" style={styles.sectionTitle}>
-        Now Playing
-      </ThemedText>
-
       <ThemedView style={styles.songRow}>
-        {metadata.albumArtUri ? (
+        {metadata.albumArtBase64 ? (
+          <Image source={{ uri: `data:image/jpeg;base64,${metadata.albumArtBase64}` }} style={styles.albumArt} />
+        ) : metadata.albumArtUri ? (
           <Image source={{ uri: metadata.albumArtUri }} style={styles.albumArt} />
         ) : (
           <ThemedView style={[styles.albumArt, styles.albumArtPlaceholder]}>
@@ -93,40 +126,53 @@ function NowPlayingCard() {
         )}
 
         <ThemedView style={styles.songInfo}>
-          <ThemedText style={styles.songTitle} numberOfLines={1}>
+          {metadata.album && (
+            <ThemedView style={styles.albumLabel}>
+              <ThemedText type="small" style={styles.albumLabelText}>
+                ♪ {metadata.album.toUpperCase()}
+              </ThemedText>
+            </ThemedView>
+          )}
+          <ThemedText style={styles.songTitle}>
             {metadata.title}
           </ThemedText>
           {metadata.artist && (
-            <ThemedText type="small" numberOfLines={1}>
-              {metadata.artist}
-            </ThemedText>
+            <ThemedView style={styles.artistRow}>
+              <ThemedText type="small" style={styles.artistIcon}>
+                •
+              </ThemedText>
+              <ThemedText type="small">
+                {metadata.artist}
+              </ThemedText>
+            </ThemedView>
           )}
-          {metadata.album && (
-            <ThemedText type="small" numberOfLines={1}>
-              {metadata.album}
+          <ThemedView style={styles.statusRow}>
+            <ThemedText style={[styles.statusIcon, metadata.isPlaying && styles.statusIconPlaying]}>
+              {metadata.isPlaying ? '▸' : '‖'}
             </ThemedText>
-          )}
-          <ThemedText type="small">
-            {metadata.isPlaying ? '▶ Playing' : '⏸ Paused'}
-          </ThemedText>
-          {metadata.playbackState && (
             <ThemedText type="small">
-              pos: {metadata.playbackPosition}ms / {metadata.duration}ms ({metadata.playbackState})
+              {metadata.isPlaying ? 'Playing' : 'Paused'}
             </ThemedText>
-          )}
+          </ThemedView>
         </ThemedView>
       </ThemedView>
 
-      {metadata.rawPlaybackStateJson && (
-        <ThemedText type="code" style={styles.metadataJson}>
-          {(() => {
-            try {
-              return JSON.stringify(JSON.parse(metadata.rawPlaybackStateJson), null, 2);
-            } catch {
-              return metadata.rawPlaybackStateJson;
-            }
-          })()}
-        </ThemedText>
+      {metadata.playbackState && metadata.duration > 0 && (
+        <View style={styles.progressSection}>
+          <View style={styles.progressRow}>
+            <ThemedText type="small" style={styles.progressTime}>
+              {formatTime(displayPosition)}
+            </ThemedText>
+            <View style={styles.progressTrack}>
+              <View
+                style={[styles.progressFill, { width: `${progress * 100}%` }]}
+              />
+            </View>
+            <ThemedText type="small" style={styles.progressTime}>
+              {formatTime(metadata.duration)}
+            </ThemedText>
+          </View>
+        </View>
       )}
     </ThemedView>
   );
@@ -183,7 +229,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.three,
     borderRadius: Spacing.four,
-    gap: Spacing.two,
+    gap: Spacing.three,
   },
   sectionTitle: {
     textAlign: 'center',
@@ -203,13 +249,12 @@ const styles = StyleSheet.create({
   },
   songRow: {
     flexDirection: 'row',
-    gap: Spacing.two,
-    alignItems: 'center',
+    gap: Spacing.three,
   },
   albumArt: {
-    width: 64,
-    height: 64,
-    borderRadius: Spacing.one,
+    width: 120,
+    height: 120,
+    borderRadius: Spacing.two,
   },
   albumArtPlaceholder: {
     backgroundColor: '#333',
@@ -219,9 +264,79 @@ const styles = StyleSheet.create({
   albumArtText: {
     color: '#FFF',
   },
+  progressSection: {
+    marginTop: Spacing.one,
+  },
+  progressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  progressTrack: {
+    flex: 1,
+    height: 4,
+    backgroundColor: 'rgba(128, 128, 128, 0.3)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#208AEF',
+    borderRadius: 2,
+  },
+  progressTime: {
+    fontVariant: ['tabular-nums'],
+    minWidth: 32,
+  },
   songInfo: {
     flex: 1,
-    gap: Spacing.one / 4,
+    gap: Spacing.one,
+    overflow: 'hidden',
+  },
+  albumLabel: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#208AEF33',
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.half,
+    borderRadius: Spacing.one,
+  },
+  albumLabelText: {
+    fontSize: 11,
+    fontWeight: 600,
+    letterSpacing: 0.5,
+  },
+  artistRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+    alignSelf: 'flex-start',
+    flexShrink: 1,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.half,
+    borderRadius: Spacing.five,
+    backgroundColor: '#208AEF55',
+  },
+  artistIcon: {
+    fontSize: 12,
+    color: '#208AEF',
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+    alignSelf: 'flex-start',
+    flexShrink: 1,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.half,
+    borderRadius: Spacing.five,
+    backgroundColor: '#208AEF55',
+  },
+  statusIcon: {
+    fontSize: 14,
+    color: '#208AEF',
+  },
+  statusIconPlaying: {
+    color: '#208AEF',
   },
   songTitle: {
     fontSize: 18,
