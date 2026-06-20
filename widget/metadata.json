@@ -1,0 +1,21 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "",
+                "Name": "Lyrink"
+            }
+        ],
+        "Category": "Miscellaneous",
+        "Description": "A simple Hello World widget",
+        "EnabledByDefault": true,
+        "Icon": "applications-other",
+        "Id": "com.github.lyrink.helloworld",
+        "License": "GPL-2.0+",
+        "Name": "Hello World",
+        "Version": "0.1",
+        "Website": ""
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}
