@@ -13,6 +13,13 @@ PlasmoidItem {
     property bool isPlaying: false
     property double startTime: 0
     property string errorMessage: ""
+    property string trackTitle: ""
+    property string trackArtist: ""
+    property double trackDuration: 0
+    property bool isLoadingLyrics: false
+    property string prevLyric: ""
+    property string nextLyric: ""
+    property double lyricSlideOffset: 0
 
     compactRepresentation: Item {
         Layout.preferredWidth: label.implicitWidth
@@ -20,10 +27,27 @@ PlasmoidItem {
 
         PlasmaComponents.Label {
             id: label
+            opacity: root.isLoadingLyrics && root.isPlaying ? 0 : 1
             anchors.fill: parent
             text: root.currentLyric.length > 0 ? root.currentLyric : (root.isPlaying ? "\u266A" : "Lyrink")
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
+        }
+
+        PlasmaComponents.Label {
+            id: loadingSpinner
+            visible: root.isLoadingLyrics && root.isPlaying
+            text: "\u27F3"
+            font.pointSize: 14
+            anchors.centerIn: parent
+
+            NumberAnimation on rotation {
+                from: 0
+                to: 360
+                duration: 1000
+                loops: Animation.Infinite
+                running: root.isLoadingLyrics && root.isPlaying
+            }
         }
 
         MouseArea {
@@ -40,13 +64,13 @@ PlasmoidItem {
         spacing: 8
 
         PlasmaComponents.Label {
-            text: "The Weeknd"
+            text: root.trackArtist.length > 0 ? root.trackArtist : "Artist"
             font.pointSize: 10
             opacity: 0.7
         }
 
         PlasmaComponents.Label {
-            text: "Less Than Zero"
+            text: root.trackTitle.length > 0 ? root.trackTitle : "Title"
             font.pointSize: 14
             font.bold: true
         }
@@ -62,13 +86,54 @@ PlasmoidItem {
             color: "#e74c3c"
         }
 
-        PlasmaComponents.Label {
-            id: currentLyricLabel
-            text: root.currentLyric
-            visible: root.isPlaying && root.currentLyric.length > 0
-            horizontalAlignment: Text.AlignHCenter
+        Item {
+            id: lyricsViewport
             Layout.fillWidth: true
-            wrapMode: Text.WordWrap
+            Layout.preferredHeight: 120
+            clip: true
+
+            Column {
+                id: lyricsColumn
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: parent.height / 2 - implicitHeight / 2 + root.lyricSlideOffset
+                spacing: 8
+
+                Behavior on y { NumberAnimation { duration: 300; easing.type: Easing.InOutQuad } }
+
+                PlasmaComponents.Label {
+                    text: root.prevLyric
+                    visible: root.isPlaying && root.prevLyric.length > 0
+                    opacity: 0.4
+                    font.pointSize: 10
+                    horizontalAlignment: Text.AlignHCenter
+                    width: lyricsViewport.width
+                    wrapMode: Text.WordWrap
+                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                }
+
+                PlasmaComponents.Label {
+                    text: root.currentLyric
+                    visible: root.isPlaying && root.currentLyric.length > 0
+                    opacity: 1.0
+                    font.pointSize: 14
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    width: lyricsViewport.width
+                    wrapMode: Text.WordWrap
+                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                }
+
+                PlasmaComponents.Label {
+                    text: root.nextLyric
+                    visible: root.isPlaying && root.nextLyric.length > 0
+                    opacity: 0.4
+                    font.pointSize: 10
+                    horizontalAlignment: Text.AlignHCenter
+                    width: lyricsViewport.width
+                    wrapMode: Text.WordWrap
+                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                }
+            }
         }
 
         PlasmaComponents.Button {
@@ -92,12 +157,22 @@ PlasmoidItem {
         onTriggered: updateCurrentLyric()
     }
 
+    Timer {
+        id: lyricSlideResetTimer
+        interval: 50
+        onTriggered: root.lyricSlideOffset = 0
+    }
+
     function startPlayback() {
         currentLyric = ""
         errorMessage = ""
         lyricsData = []
         startTime = Date.now()
         isPlaying = true
+        trackTitle = "Less Than Zero"
+        trackArtist = "The Weeknd"
+        trackDuration = 212000
+        isLoadingLyrics = true
         lyricTimer.start()
         fetchLyrics()
     }
@@ -107,13 +182,21 @@ PlasmoidItem {
         lyricTimer.stop()
         currentLyric = ""
         lyricsData = []
+        isLoadingLyrics = false
+        prevLyric = ""
+        nextLyric = ""
     }
 
     function fetchLyrics() {
+        var artist = formatUrlParam(trackArtist)
+        var title = formatUrlParam(trackTitle)
+        var duration = Math.round(trackDuration / 1000)
+        var url = "https://lrclib.net/api/get?artist_name=" + artist + "&track_name=" + title + "&duration=" + duration
         var xhr = new XMLHttpRequest()
-        xhr.open("GET", "https://lrclib.net/api/get?artist_name=The+Weeknd&track_name=Less+Than+Zero&duration=212")
+        xhr.open("GET", url)
         xhr.onreadystatechange = function() {
             if (xhr.readyState === 4) {
+                root.isLoadingLyrics = false
                 if (xhr.status === 200) {
                     try {
                         var data = JSON.parse(xhr.responseText)
@@ -149,23 +232,43 @@ PlasmoidItem {
         return result
     }
 
+    function formatUrlParam(text) {
+        return text.trim().replace(/\s+/g, "+")
+    }
+
     function updateCurrentLyric() {
         if (lyricsData.length === 0) return
+        if (!isPlaying) return
 
         var elapsed = (Date.now() - startTime) / 1000
-        var found = ""
+        if (elapsed < 0) elapsed = 0
+
+        var currentIndex = -1
 
         for (var i = 0; i < lyricsData.length; i++) {
             if (lyricsData[i].time <= elapsed) {
                 if (lyricsData[i].text.length > 0) {
-                    found = lyricsData[i].text
+                    currentIndex = i
                 }
             } else {
                 break
             }
         }
 
-        currentLyric = found
+        if (currentIndex >= 0) {
+            var newPrev = currentIndex > 0 ? lyricsData[currentIndex - 1].text : ""
+            var newCurrent = lyricsData[currentIndex].text
+            var newNext = currentIndex < lyricsData.length - 1 ? lyricsData[currentIndex + 1].text : ""
+
+            if (newCurrent !== currentLyric && currentLyric.length > 0) {
+                root.lyricSlideOffset = 15
+                lyricSlideResetTimer.start()
+            }
+
+            prevLyric = newPrev
+            currentLyric = newCurrent
+            nextLyric = newNext
+        }
 
         var lastLyricTime = lyricsData[lyricsData.length - 1].time
         if (elapsed > lastLyricTime + 5) {
