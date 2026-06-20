@@ -193,6 +193,10 @@ class MediaNotificationListenerService : NotificationListenerService() {
       currentMetadata = metadata
       Log.d(TAG, "Metadata: ${metadata.title} - ${metadata.artist} (${metadata.playbackState})")
       MediaEventEmitter.emit(metadata)
+
+      if (LyrinkForegroundService.isRunning && (prev == null || prev.title != metadata.title || prev.artist != metadata.artist || prev.isPlaying != metadata.isPlaying || prev.playbackPosition != metadata.playbackPosition)) {
+        PlaybackStateReporter.report(metadata)
+      }
     }
   }
 
