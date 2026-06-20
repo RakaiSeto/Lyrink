@@ -17,7 +17,5 @@
         "Version": "0.1",
         "Website": ""
     },
-    "X-Plasma-API-Minimum-Version": "6.0",
-    "X-Plasma-ConfigModel": "config/main.xml",
-    "X-Plasma-ConfigSources": ["ui/ConfigGeneral.qml"]
+    "X-Plasma-API-Minimum-Version": "6.0"
 }
