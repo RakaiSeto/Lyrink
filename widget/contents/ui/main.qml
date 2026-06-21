@@ -101,6 +101,16 @@ PlasmoidItem {
                 opacity: 0.6
             }
 
+            PlasmaComponents.ToolButton {
+                icon.name: "view-refresh"
+                Layout.preferredWidth: 24
+                Layout.preferredHeight: 24
+                onClicked: {
+                    ws.active = false
+                    ws.active = root.wsUrl.length > 0
+                }
+            }
+
             Item {
                 Layout.fillWidth: true
             }
