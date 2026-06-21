@@ -8,12 +8,12 @@
             }
         ],
         "Category": "Miscellaneous",
-        "Description": "A simple Hello World widget",
+        "Description": "Real-time synced lyrics display from YouTube Music playback via KDE Plasma",
         "EnabledByDefault": true,
         "Icon": "applications-other",
         "Id": "com.github.lyrink.helloworld",
         "License": "GPL-2.0+",
-        "Name": "Hello World",
+        "Name": "Lyrink",
         "Version": "0.1",
         "Website": ""
     },
