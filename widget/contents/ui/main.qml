@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import QtWebSockets
+import QtQuick.LocalStorage
 import org.kde.plasma.plasmoid
 import org.kde.plasma.components as PlasmaComponents
 
@@ -27,6 +28,13 @@ PlasmoidItem {
     property string prevLyric: ""
     property string nextLyric: ""
     property double lyricSlideOffset: 0
+    property double lyricDelay: 0.3
+    property var db: null
+    property var currentXhr: null
+
+    Component.onCompleted: {
+        initDatabase()
+    }
 
     onWsUrlChanged: {
         reconnectTimer.stop()
@@ -42,7 +50,7 @@ PlasmoidItem {
             id: label
             opacity: root.isLoadingLyrics && root.isPlaying ? 0 : 1
             anchors.fill: parent
-            text: root.currentLyric.length > 0 ? root.currentLyric : (root.isPlaying ? "\u266A" : "Lyrink")
+            text: root.isPlaying ? (root.currentLyric.length > 0 ? root.currentLyric : (root.isLoadingLyrics ? "\u27F3" : (root.errorMessage.length > 0 ? "no lyric found for " + root.trackTitle + " by " + root.trackArtist : "\u266A"))) : (root.trackTitle.length > 0 ? root.trackTitle + " (" + root.trackArtist + ") - paused" : "Lyrink")
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
         }
@@ -93,6 +101,16 @@ PlasmoidItem {
                 opacity: 0.6
             }
 
+            PlasmaComponents.ToolButton {
+                icon.name: "view-refresh"
+                Layout.preferredWidth: 24
+                Layout.preferredHeight: 24
+                onClicked: {
+                    ws.active = false
+                    ws.active = root.wsUrl.length > 0
+                }
+            }
+
             Item {
                 Layout.fillWidth: true
             }
@@ -111,30 +129,58 @@ PlasmoidItem {
             text: root.trackArtist
             font.pointSize: 10
             opacity: 0.7
+            horizontalAlignment: Text.AlignHCenter
+            Layout.fillWidth: true
         }
 
         PlasmaComponents.Label {
             text: root.trackTitle
             font.pointSize: 14
             font.bold: true
-        }
-
-        Item {
-            Layout.fillHeight: true
-        }
-
-        PlasmaComponents.Label {
-            id: statusLabel
-            text: root.errorMessage
-            visible: root.errorMessage.length > 0
-            color: "#e74c3c"
+            wrapMode: Text.WordWrap
+            horizontalAlignment: Text.AlignHCenter
+            Layout.fillWidth: true
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
         }
 
         Item {
             id: lyricsViewport
             Layout.fillWidth: true
-            Layout.preferredHeight: 120
+            Layout.fillHeight: true
+            Layout.minimumHeight: 120
             clip: true
+
+            PlasmaComponents.Label {
+                text: "Lyric not found"
+                visible: root.errorMessage.length > 0 && root.currentLyric.length === 0
+                opacity: 0.6
+                font.pointSize: 14
+                font.bold: true
+                horizontalAlignment: Text.AlignHCenter
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.verticalCenter: parent.verticalCenter
+            }
+
+            PlasmaComponents.Label {
+                text: "Fetching lyrics..."
+                visible: root.isLoadingLyrics && root.currentLyric.length === 0
+                opacity: 0.6
+                font.pointSize: 14
+                horizontalAlignment: Text.AlignHCenter
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.verticalCenter: parent.verticalCenter
+            }
+
+            PlasmaComponents.Label {
+                text: "\u266A"
+                visible: root.lyricsData.length > 0 && root.currentLyric.length === 0 && !root.isLoadingLyrics && root.errorMessage.length === 0
+                opacity: 0.6
+                font.pointSize: 24
+                horizontalAlignment: Text.AlignHCenter
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.verticalCenter: parent.verticalCenter
+            }
 
             Column {
                 id: lyricsColumn
@@ -146,7 +192,7 @@ PlasmoidItem {
 
                 PlasmaComponents.Label {
                     text: root.prevLyric
-                    visible: root.isPlaying && root.prevLyric.length > 0
+                    visible: root.prevLyric.length > 0
                     opacity: 0.4
                     font.pointSize: 10
                     horizontalAlignment: Text.AlignHCenter
@@ -157,7 +203,7 @@ PlasmoidItem {
 
                 PlasmaComponents.Label {
                     text: root.currentLyric
-                    visible: root.isPlaying && root.currentLyric.length > 0
+                    visible: root.currentLyric.length > 0
                     opacity: 1.0
                     font.pointSize: 14
                     font.bold: true
@@ -169,7 +215,7 @@ PlasmoidItem {
 
                 PlasmaComponents.Label {
                     text: root.nextLyric
-                    visible: root.isPlaying && root.nextLyric.length > 0
+                    visible: root.nextLyric.length > 0
                     opacity: 0.4
                     font.pointSize: 10
                     horizontalAlignment: Text.AlignHCenter
@@ -246,6 +292,8 @@ PlasmoidItem {
                     root.lastTrackKey = trackKey
                     root.lyricsData = []
                     root.currentLyric = ""
+                    root.prevLyric = ""
+                    root.nextLyric = ""
                     root.errorMessage = ""
                     root.isLoadingLyrics = true
                     fetchLyrics()
@@ -312,19 +360,39 @@ PlasmoidItem {
     }
 
     function fetchLyrics() {
+        if (currentXhr) {
+            currentXhr.abort()
+            currentXhr = null
+        }
+
+        var trackKey = trackTitle + "|||" + trackArtist
+        var cached = getCachedLyrics(trackKey)
+        if (cached) {
+            root.isLoadingLyrics = false
+            lyricsData = parseSyncedLyrics(cached)
+            return
+        }
+
         var artist = formatUrlParam(trackArtist)
         var title = formatUrlParam(trackTitle)
         var duration = Math.round(trackDuration / 1000)
-        var url = "https://lrclib.net/api/get?artist_name=" + artist + "&track_name=" + title + "&duration=" + duration
+        var url = "https://lrclib.net/api/get?artist_name=" + artist + "&track_name=" + title
+        if (duration > 0) {
+            url += "&duration=" + duration
+        }
         var xhr = new XMLHttpRequest()
         xhr.open("GET", url)
         xhr.onreadystatechange = function() {
             if (xhr.readyState === 4) {
+                root.currentXhr = null
+                var currentTrackKey = root.trackTitle + "|||" + root.trackArtist
+                if (currentTrackKey !== trackKey) return
                 root.isLoadingLyrics = false
                 if (xhr.status === 200) {
                     try {
                         var data = JSON.parse(xhr.responseText)
                         if (data.syncedLyrics) {
+                            saveCachedLyrics(trackKey, data.syncedLyrics)
                             lyricsData = parseSyncedLyrics(data.syncedLyrics)
                         } else {
                             errorMessage = "No synced lyrics available"
@@ -337,6 +405,7 @@ PlasmoidItem {
                 }
             }
         }
+        currentXhr = xhr
         xhr.send()
     }
 
@@ -357,14 +426,41 @@ PlasmoidItem {
     }
 
     function formatUrlParam(text) {
-        return text.trim().replace(/\s+/g, "+")
+        return encodeURIComponent(text.trim())
+    }
+
+    function initDatabase() {
+        db = LocalStorage.openDatabaseSync("LyrinkLyrics", "1.0", "Lyrics cache for Lyrink widget", 1048576)
+        db.transaction(function(tx) {
+            tx.executeSql("CREATE TABLE IF NOT EXISTS lyrics_cache (track_key TEXT PRIMARY KEY, synced_lyrics TEXT NOT NULL, fetched_at INTEGER NOT NULL)")
+        })
+    }
+
+    function getCachedLyrics(trackKey) {
+        if (!db) return null
+        var result = null
+        db.transaction(function(tx) {
+            var rs = tx.executeSql("SELECT synced_lyrics FROM lyrics_cache WHERE track_key = ?", [trackKey])
+            if (rs.rows.length > 0) {
+                result = rs.rows.item(0).synced_lyrics
+            }
+        })
+        return result
+    }
+
+    function saveCachedLyrics(trackKey, syncedLyrics) {
+        if (!db) return
+        db.transaction(function(tx) {
+            tx.executeSql("INSERT OR REPLACE INTO lyrics_cache (track_key, synced_lyrics, fetched_at) VALUES (?, ?, ?)",
+                [trackKey, syncedLyrics, Date.now()])
+        })
     }
 
     function updateCurrentLyric() {
         if (lyricsData.length === 0) return
         if (!isPlaying) return
 
-        var elapsed = ((Date.now() - deviceTimestamp) + devicePosition) / 1000
+        var elapsed = ((Date.now() - deviceTimestamp) + devicePosition) / 1000 - root.lyricDelay
         if (elapsed < 0) elapsed = 0
 
         var currentIndex = -1
