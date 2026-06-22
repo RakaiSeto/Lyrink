@@ -111,6 +111,26 @@ PlasmoidItem {
                 }
             }
 
+            PlasmaComponents.ToolButton {
+                id: cacheButton
+                icon.name: "edit-delete"
+                Layout.preferredWidth: 24
+                Layout.preferredHeight: 24
+                onClicked: cacheMenu.open(cacheButton)
+
+                PlasmaComponents.Menu {
+                    id: cacheMenu
+                    PlasmaComponents.MenuItem {
+                        text: "Clear Current Song"
+                        onClicked: clearCurrentSongCache()
+                    }
+                    PlasmaComponents.MenuItem {
+                        text: "Clear All Cache"
+                        onClicked: clearLyricsCache()
+                    }
+                }
+            }
+
             Item {
                 Layout.fillWidth: true
             }
@@ -375,11 +395,7 @@ PlasmoidItem {
 
         var artist = formatUrlParam(trackArtist)
         var title = formatUrlParam(trackTitle)
-        var duration = Math.round(trackDuration / 1000)
-        var url = "https://lrclib.net/api/get?artist_name=" + artist + "&track_name=" + title
-        if (duration > 0) {
-            url += "&duration=" + duration
-        }
+        var url = "https://lrclib.net/api/search?artist_name=" + artist + "&track_name=" + title
         var xhr = new XMLHttpRequest()
         xhr.open("GET", url)
         xhr.onreadystatechange = function() {
@@ -390,11 +406,17 @@ PlasmoidItem {
                 root.isLoadingLyrics = false
                 if (xhr.status === 200) {
                     try {
-                        var data = JSON.parse(xhr.responseText)
-                        if (data.syncedLyrics) {
-                            saveCachedLyrics(trackKey, data.syncedLyrics)
-                            lyricsData = parseSyncedLyrics(data.syncedLyrics)
-                        } else {
+                        var results = JSON.parse(xhr.responseText)
+                        var found = false
+                        for (var i = 0; i < results.length; i++) {
+                            if (results[i].syncedLyrics) {
+                                saveCachedLyrics(trackKey, results[i].syncedLyrics)
+                                lyricsData = parseSyncedLyrics(results[i].syncedLyrics)
+                                found = true
+                                break
+                            }
+                        }
+                        if (!found) {
                             errorMessage = "No synced lyrics available"
                         }
                     } catch (e) {
@@ -454,6 +476,24 @@ PlasmoidItem {
             tx.executeSql("INSERT OR REPLACE INTO lyrics_cache (track_key, synced_lyrics, fetched_at) VALUES (?, ?, ?)",
                 [trackKey, syncedLyrics, Date.now()])
         })
+    }
+
+    function clearLyricsCache() {
+        if (!db) return
+        db.transaction(function(tx) {
+            tx.executeSql("DELETE FROM lyrics_cache")
+        })
+        lyricsData = []
+        currentLyric = ""
+    }
+
+    function clearCurrentSongCache() {
+        if (!db || !lastTrackKey) return
+        db.transaction(function(tx) {
+            tx.executeSql("DELETE FROM lyrics_cache WHERE track_key = ?", [lastTrackKey])
+        })
+        lyricsData = []
+        currentLyric = ""
     }
 
     function updateCurrentLyric() {
