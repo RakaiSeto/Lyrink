@@ -1,7 +1,6 @@
 const { withAppBuildGradle } = require('expo/config-plugins');
 
-const RELEASE_SIGNING_CONFIG = `
-        release {
+const RELEASE_SIGNING = `        release {
             def ksPath = System.getenv("KEYSTORE_PATH")
             if (ksPath) {
                 storeFile file(ksPath)
@@ -20,22 +19,43 @@ module.exports = function withReleaseSigning(config) {
   return withAppBuildGradle(config, (config) => {
     let contents = config.modResults.contents;
 
-    // Add release signing config after the debug block
-    const debugBlockEnd = contents.indexOf('debug {') !== -1
-      ? contents.indexOf('}', contents.indexOf('debug {')) + 1
-      : null;
+    // Find signingConfigs block boundaries by brace counting
+    const scStart = contents.indexOf('signingConfigs {');
+    if (scStart === -1) return config;
 
-    if (debugBlockEnd && !contents.includes('release {')) {
-      contents =
-        contents.slice(0, debugBlockEnd) +
-        '\n' +
-        RELEASE_SIGNING_CONFIG +
-        contents.slice(debugBlockEnd);
+    let depth = 0;
+    let scEnd = -1;
+    for (let i = contents.indexOf('{', scStart); i < contents.length; i++) {
+      if (contents[i] === '{') depth++;
+      if (contents[i] === '}') depth--;
+      if (depth === 0) { scEnd = i + 1; break; }
+    }
+    if (scEnd === -1) return config;
+
+    // Only inject if release signing config doesn't exist within signingConfigs block
+    const signingConfigsBlock = contents.substring(scStart, scEnd);
+    if (!signingConfigsBlock.includes('release {')) {
+      const debugStart = signingConfigsBlock.indexOf('debug {');
+      if (debugStart !== -1) {
+        let dDepth = 0;
+        let debugEnd = -1;
+        for (let i = signingConfigsBlock.indexOf('{', debugStart); i < signingConfigsBlock.length; i++) {
+          if (signingConfigsBlock[i] === '{') dDepth++;
+          if (signingConfigsBlock[i] === '}') dDepth--;
+          if (dDepth === 0) { debugEnd = i + 1; break; }
+        }
+        if (debugEnd !== -1) {
+          const absoluteInsertPos = scStart + debugEnd;
+          contents = contents.slice(0, absoluteInsertPos) +
+            '\n' + RELEASE_SIGNING + '\n' +
+            contents.slice(absoluteInsertPos);
+        }
+      }
     }
 
-    // Point release buildType to release signing config
+    // Replace signingConfigs.debug -> signingConfigs.release in buildTypes.release
     contents = contents.replace(
-      /buildTypes\s*\{\s*[\s\S]*?release\s*\{[^}]*signingConfig\s+signingConfigs\.debug/,
+      /buildTypes\s*\{[\s\S]*?release\s*\{[^}]*signingConfig\s+signingConfigs\.debug/,
       (match) => match.replace('signingConfigs.debug', 'signingConfigs.release')
     );
 
