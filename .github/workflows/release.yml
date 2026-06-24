@@ -32,8 +32,7 @@ jobs:
         run: npm ci
 
       - name: Decode keystore
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
-        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > lyrink-release.jks
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > lyrink-release.jks || true
 
       - name: Set keystore path
         id: keystore

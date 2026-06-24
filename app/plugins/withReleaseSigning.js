@@ -35,7 +35,7 @@ module.exports = function withReleaseSigning(config) {
 
     // Point release buildType to release signing config
     contents = contents.replace(
-      /buildTypes\s*\{[\s\S]*?release\s*\{[\s\S]*?signingConfig\s+signingConfigs\.debug/,
+      /buildTypes\s*\{\s*[\s\S]*?release\s*\{[^}]*signingConfig\s+signingConfigs\.debug/,
       (match) => match.replace('signingConfigs.debug', 'signingConfigs.release')
     );
 
