@@ -63,13 +63,13 @@ jobs:
         id: find-apk
         run: |
           APK_PATH=$(find app/android/app/build/outputs/apk/release -name "*.apk" | head -1)
-          echo "apk_path=$APK_PATH" >> "$GITHUB_OUTPUT"
+          cp "$APK_PATH" ./app-release.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-release
-          path: ${{ steps.find-apk.outputs.apk_path }}
+          path: app-release.apk
 
   package-widget:
     runs-on: ubuntu-latest
@@ -108,5 +108,5 @@ jobs:
             --repo "${{ github.repository }}" \
             --title "${{ github.ref_name }}" \
             --generate-notes \
-            android-release/*.apk#Lyrink-${{ github.ref_name }}.apk \
+            android-release/app-release.apk#Lyrink-${{ github.ref_name }}.apk \
             lyrink-widget.tar.gz#lyrink-widget-${{ github.ref_name }}.tar.gz
