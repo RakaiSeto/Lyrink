@@ -292,7 +292,103 @@ The server starts on port 8080. Configure the webhook URL in `PlaybackStateRepor
 
 ### Widget
 
-The widget requires KDE Plasma 6. Install by placing the `widget/` directory in your Plasma widget directory or through the Plasma widget installer. Configure the WebSocket URL in the widget settings (default: `wss://api-lyrink.rakaiseto.com/ws`).
+The widget requires KDE Plasma 6 (6.0+). Follow the steps below for a full installation from a GitHub Release tar.gz.
+
+#### 1. Install System Dependencies
+
+**Ubuntu/Debian:**
+
+```bash
+sudo apt update
+sudo apt install plasma-workspace libplasma6 \
+  qml6-module-qtquick qml6-module-qtquick-layouts \
+  qml6-module-qtquick-controls2 qml6-module-qtwebsockets \
+  qml6-module-qtquick-localstorage qml6-module-org-kde-kirigami
+```
+
+**Arch Linux:**
+
+```bash
+sudo pacman -S plasma-workspace plasma-framework qt6-declarative \
+  qt6-quickcontrols qt6-websockets kirigami
+```
+
+**Fedora:**
+
+```bash
+sudo dnf install plasma-workspace plasma-framework qt6-qtdeclarative \
+  qt6-qtquickcontrols2 qt6-qtwebsockets kf6-kirigami
+```
+
+#### 2. Download the Widget
+
+Download the latest `lyrink-widget-<version>.tar.gz` from [GitHub Releases](https://github.com/rakaiss/Lyrink/releases).
+
+```bash
+wget https://github.com/rakaiss/Lyrink/releases/download/v<version>/lyrink-widget-<version>.tar.gz
+```
+
+#### 3. Extract the Archive
+
+```bash
+tar -xzf lyrink-widget-*.tar.gz
+```
+
+#### 4. Install the Widget
+
+**Method A: kpackagetool6 (Recommended)**
+
+```bash
+kpackagetool6 -t Plasma/Applet -i ./widget
+```
+
+**Method B: Manual Installation**
+
+```bash
+mkdir -p ~/.local/share/plasma/plasmoids
+cp -r widget ~/.local/share/plasma/plasmoids/com.github.lyrink.helloworld
+```
+
+#### 5. Restart Plasma
+
+```bash
+kquitapp6 plasmashell && kstart6 plasmashell
+```
+
+#### 6. Add the Widget to Desktop
+
+1. Right-click on desktop → **Add Widgets**
+2. Search for **"Lyrink"**
+3. Click to add it to your desktop or panel
+
+#### 7. Configure the Widget
+
+1. Right-click the widget → **Configure**
+2. Set the **WebSocket URL** (default: `wss://api-lyrink.rakaiseto.com/ws`)
+3. Click **Apply**
+
+#### 8. Verify Installation
+
+```bash
+kpackagetool6 -t Plasma/Applet -l | grep lyrink
+```
+
+#### Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Widget not showing in Add Widgets | Restart Plasma: `kquitapp6 plasmashell && kstart6 plasmashell` |
+| QtWebSockets not found | Ensure `qml6-module-qtwebsockets` is installed |
+| WebSocket connection fails | Check firewall allows outbound WSS to `api-lyrink.rakaiseto.com` |
+| Lyrics not loading | Verify internet connection to `lrclib.net` |
+
+#### Uninstall
+
+```bash
+kpackagetool6 -t Plasma/Applet -r com.github.lyrink.helloworld
+# OR
+rm -rf ~/.local/share/plasma/plasmoids/com.github.lyrink.helloworld
+```
 
 ## Configuration
 
