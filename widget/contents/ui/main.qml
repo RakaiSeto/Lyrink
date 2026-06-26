@@ -28,9 +28,10 @@ PlasmoidItem {
     property string prevLyric: ""
     property string nextLyric: ""
     property double lyricSlideOffset: 0
-    property double lyricDelay: 0.3
+    property double lyricDelay: 0
     property var db: null
     property var currentXhr: null
+    property int lyricsRetryCount: 0
 
     Component.onCompleted: {
         initDatabase()
@@ -172,6 +173,7 @@ PlasmoidItem {
             clip: true
 
             PlasmaComponents.Label {
+                id: lyricsErrorLabel
                 text: "Lyric not found"
                 visible: root.errorMessage.length > 0 && root.currentLyric.length === 0
                 opacity: 0.6
@@ -180,6 +182,28 @@ PlasmoidItem {
                 horizontalAlignment: Text.AlignHCenter
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.verticalCenter: parent.verticalCenter
+            }
+
+            PlasmaComponents.Label {
+                text: "\u21BB Tap to retry"
+                visible: root.errorMessage.length > 0 && root.currentLyric.length === 0
+                opacity: 0.4
+                font.pointSize: 9
+                horizontalAlignment: Text.AlignHCenter
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.top: lyricsErrorLabel.bottom
+                anchors.topMargin: 8
+
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        root.errorMessage = ""
+                        root.lyricsRetryCount = 0
+                        root.isLoadingLyrics = true
+                        fetchLyrics()
+                    }
+                }
             }
 
             PlasmaComponents.Label {
@@ -315,6 +339,8 @@ PlasmoidItem {
                     root.prevLyric = ""
                     root.nextLyric = ""
                     root.errorMessage = ""
+                    root.lyricsRetryCount = 0
+                    lyricsRetryTimer.stop()
                     root.isLoadingLyrics = true
                     fetchLyrics()
                 }
@@ -341,6 +367,14 @@ PlasmoidItem {
         running: false
         repeat: true
         onTriggered: updateCurrentLyric()
+    }
+
+    Timer {
+        id: lyricsRetryTimer
+        interval: 1500
+        running: false
+        repeat: false
+        onTriggered: fetchLyrics()
     }
 
     Timer {
@@ -408,22 +442,57 @@ PlasmoidItem {
                     try {
                         var results = JSON.parse(xhr.responseText)
                         var found = false
+                        var bestMatch = null
+                        var bestDiff = Infinity
+
                         for (var i = 0; i < results.length; i++) {
                             if (results[i].syncedLyrics) {
-                                saveCachedLyrics(trackKey, results[i].syncedLyrics)
-                                lyricsData = parseSyncedLyrics(results[i].syncedLyrics)
-                                found = true
-                                break
+                                var resultDuration = results[i].duration * 1000
+                                var diff = Math.abs(resultDuration - root.trackDuration)
+                                if (diff < bestDiff) {
+                                    bestDiff = diff
+                                    bestMatch = results[i]
+                                }
                             }
                         }
+
+                        if (bestMatch) {
+                            saveCachedLyrics(trackKey, bestMatch.syncedLyrics)
+                            lyricsData = parseSyncedLyrics(bestMatch.syncedLyrics)
+                            found = true
+                        }
+
                         if (!found) {
-                            errorMessage = "No synced lyrics available"
+                            if (root.lyricsRetryCount < 2) {
+                                root.lyricsRetryCount++
+                                root.isLoadingLyrics = true
+                                lyricsRetryTimer.start()
+                            } else {
+                                errorMessage = "No synced lyrics available"
+                                root.lyricsRetryCount = 0
+                            }
+                        } else {
+                            root.lyricsRetryCount = 0
                         }
                     } catch (e) {
-                        errorMessage = "Failed to parse lyrics data"
+                        if (root.lyricsRetryCount < 2) {
+                            root.lyricsRetryCount++
+                            root.isLoadingLyrics = true
+                            lyricsRetryTimer.start()
+                        } else {
+                            errorMessage = "Failed to parse lyrics data"
+                            root.lyricsRetryCount = 0
+                        }
                     }
                 } else {
-                    errorMessage = "Failed to fetch lyrics (HTTP " + xhr.status + ")"
+                    if (root.lyricsRetryCount < 2) {
+                        root.lyricsRetryCount++
+                        root.isLoadingLyrics = true
+                        lyricsRetryTimer.start()
+                    } else {
+                        errorMessage = "Failed to fetch lyrics (HTTP " + xhr.status + ")"
+                        root.lyricsRetryCount = 0
+                    }
                 }
             }
         }
