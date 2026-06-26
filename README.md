@@ -310,14 +310,14 @@ sudo apt install plasma-workspace libplasma6 \
 
 ```bash
 sudo pacman -S plasma-workspace plasma-framework qt6-declarative \
-  qt6-quickcontrols qt6-websockets kirigami
+  qt6-quickcontrols qt6-qtwebsockets-devel kirigami
 ```
 
 **Fedora:**
 
 ```bash
 sudo dnf install plasma-workspace plasma-framework qt6-qtdeclarative \
-  qt6-qtquickcontrols2 qt6-qtwebsockets kf6-kirigami
+  qt6-qtquickcontrols2 qt6-qtwebsockets-devel kf6-kirigami
 ```
 
 #### 2. Download the Widget
@@ -352,7 +352,7 @@ cp -r widget ~/.local/share/plasma/plasmoids/com.github.lyrink.helloworld
 #### 5. Restart Plasma
 
 ```bash
-kquitapp6 plasmashell && kstart6 plasmashell
+kquitapp6 plasmashell && kstart plasmashell
 ```
 
 #### 6. Add the Widget to Desktop
