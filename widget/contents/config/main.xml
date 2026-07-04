@@ -9,5 +9,9 @@
       <label>WebSocket Server URL</label>
       <default>wss://api-lyrink.rakaiseto.com/ws</default>
     </entry>
+    <entry name="pairingCode" type="String">
+      <label>Pairing Code</label>
+      <default></default>
+    </entry>
   </group>
 </kcfg>
