@@ -1,10 +1,13 @@
 package expo.modules.medialistener
 
+import android.content.Context
+import android.content.SharedPreferences
 import android.util.Log
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 
 object PlaybackStateReporter {
@@ -17,8 +20,16 @@ object PlaybackStateReporter {
     .writeTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
     .build()
 
+  private var prefs: SharedPreferences? = null
+
+  fun init(context: Context) {
+    prefs = context.getSharedPreferences("lyrink_prefs", Context.MODE_PRIVATE)
+  }
+
   fun report(metadata: MediaMetadata) {
     try {
+      val codes = getPairingCodes()
+
       val json = JSONObject().apply {
         put("title", metadata.title ?: JSONObject.NULL)
         put("artist", metadata.artist ?: JSONObject.NULL)
@@ -29,6 +40,7 @@ object PlaybackStateReporter {
         put("duration", metadata.duration)
         put("isPlaying", metadata.isPlaying)
         put("state", metadata.playbackState ?: JSONObject.NULL)
+        put("pairingCodes", JSONArray(codes))
       }
 
       val body = json.toString().toRequestBody(JSON_MEDIA_TYPE)
@@ -51,5 +63,16 @@ object PlaybackStateReporter {
     } catch (e: Exception) {
       Log.e(TAG, "Failed to build or send playback state", e)
     }
+  }
+
+  private fun getPairingCodes(): List<String> {
+    val p = prefs ?: return emptyList()
+    val json = p.getString("pairing_codes", "[]") ?: "[]"
+    val arr = JSONArray(json)
+    val codes = mutableListOf<String>()
+    for (i in 0 until arr.length()) {
+      codes.add(arr.getString(i))
+    }
+    return codes
   }
 }
