@@ -29,6 +29,7 @@ class LyrinkForegroundService : Service() {
     super.onCreate()
     Log.d(TAG, "Foreground service created")
     isRunning = true
+    PlaybackStateReporter.init(this)
     try {
       createNotificationChannel()
     } catch (e: Exception) {

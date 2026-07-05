@@ -3,6 +3,7 @@ package expo.modules.medialistener
 import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
@@ -10,6 +11,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import org.json.JSONArray
 
 class ExpoMediaListenerModule : Module() {
   private val context: Context
@@ -110,6 +112,28 @@ class ExpoMediaListenerModule : Module() {
       }
     }
 
+    Function("addPairingCode") { code: String ->
+      val prefs = getPrefs()
+      val codes = getCodes(prefs)
+      if (!codes.contains(code)) {
+        codes.add(code)
+        prefs.edit().putString("pairing_codes", JSONArray(codes).toString()).apply()
+      }
+    }
+
+    Function("removePairingCode") { code: String ->
+      val prefs = getPrefs()
+      val codes = getCodes(prefs)
+      codes.remove(code)
+      prefs.edit().putString("pairing_codes", JSONArray(codes).toString()).apply()
+    }
+
+    Function("getPairingCodes") {
+      val prefs = getPrefs()
+      val codes = getCodes(prefs)
+      codes.toList()
+    }
+
     OnCreate {
       metadataCallback = { metadata ->
         sendEvent("onMediaMetadataChanged", mapOf(
@@ -141,5 +165,19 @@ class ExpoMediaListenerModule : Module() {
       statusCallback?.let { MediaEventEmitter.removeStatusListener(it) }
       statusCallback = null
     }
+  }
+
+  private fun getPrefs(): SharedPreferences {
+    return context.getSharedPreferences("lyrink_prefs", Context.MODE_PRIVATE)
+  }
+
+  private fun getCodes(prefs: SharedPreferences): MutableList<String> {
+    val json = prefs.getString("pairing_codes", "[]") ?: "[]"
+    val arr = JSONArray(json)
+    val codes = mutableListOf<String>()
+    for (i in 0 until arr.length()) {
+      codes.add(arr.getString(i))
+    }
+    return codes
   }
 }

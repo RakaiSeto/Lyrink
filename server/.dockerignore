@@ -1,0 +1,6 @@
+server
+uploads/
+.git
+.dockerignore
+Dockerfile
+README.md

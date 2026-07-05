@@ -38,7 +38,8 @@
         }
       ],
       "./plugins/withMediaListener",
-      "./plugins/withReactNativeArchitectures"
+      "./plugins/withReactNativeArchitectures",
+      "./plugins/withReleaseSigning"
     ],
     "experiments": {
       "typedRoutes": true,

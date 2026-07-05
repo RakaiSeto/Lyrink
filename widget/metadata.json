@@ -15,7 +15,7 @@
         "License": "GPL-2.0+",
         "Name": "Lyrink",
         "Version": "0.1",
-        "Website": ""
+        "Website": "https://github.com/rakaiseto/lyrink"
     },
     "X-Plasma-API-Minimum-Version": "6.0",
     "X-Plasma-ConfigModel": "config/main.xml",

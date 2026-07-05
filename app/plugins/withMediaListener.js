@@ -35,6 +35,7 @@ function addMediaListenerServiceToManifest(androidManifest) {
   // Add required permissions
   addPermission(androidManifest, 'android.permission.FOREGROUND_SERVICE');
   addPermission(androidManifest, 'android.permission.POST_NOTIFICATIONS');
+  addPermission(androidManifest, 'android.permission.INTERNET');
 
   // Add NotificationListenerService (existing)
   if (!serviceExists(application, 'expo.modules.medialistener.MediaNotificationListenerService')) {

@@ -28,7 +28,7 @@ PlasmoidItem {
     property string prevLyric: ""
     property string nextLyric: ""
     property double lyricSlideOffset: 0
-    property double lyricDelay: 0.3
+    property double lyricDelay: 0
     property var db: null
     property var currentXhr: null
     property int lyricsRetryCount: 0
@@ -173,6 +173,30 @@ PlasmoidItem {
                     fillMode: Image.PreserveAspectFit
                     visible: root.albumArtBase64.length > 0
                 }
+            PlasmaComponents.ToolButton {
+                id: cacheButton
+                icon.name: "edit-delete"
+                Layout.preferredWidth: 24
+                Layout.preferredHeight: 24
+                onClicked: cacheMenu.open(cacheButton)
+
+                PlasmaComponents.Menu {
+                    id: cacheMenu
+                    PlasmaComponents.MenuItem {
+                        text: "Clear Current Song"
+                        onClicked: clearCurrentSongCache()
+                    }
+                    PlasmaComponents.MenuItem {
+                        text: "Clear All Cache"
+                        onClicked: clearLyricsCache()
+                    }
+                }
+            }
+
+            Item {
+                Layout.fillWidth: true
+            }
+        }
 
                 PlasmaComponents.Label {
                     text: root.trackArtist
@@ -272,6 +296,56 @@ PlasmoidItem {
                             wrapMode: Text.WordWrap
                             Behavior on opacity { NumberAnimation { duration: 200 } }
                         }
+        Item {
+            id: lyricsViewport
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            Layout.minimumHeight: 120
+            clip: true
+
+            PlasmaComponents.Label {
+                id: lyricsErrorLabel
+                text: "Lyric not found"
+                visible: root.errorMessage.length > 0 && root.currentLyric.length === 0
+                opacity: 0.6
+                font.pointSize: 14
+                font.bold: true
+                horizontalAlignment: Text.AlignHCenter
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.verticalCenter: parent.verticalCenter
+            }
+
+            PlasmaComponents.Label {
+                text: "\u21BB Tap to retry"
+                visible: root.errorMessage.length > 0 && root.currentLyric.length === 0
+                opacity: 0.4
+                font.pointSize: 9
+                horizontalAlignment: Text.AlignHCenter
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.top: lyricsErrorLabel.bottom
+                anchors.topMargin: 8
+
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        root.errorMessage = ""
+                        root.lyricsRetryCount = 0
+                        root.isLoadingLyrics = true
+                        fetchLyrics()
+                    }
+                }
+            }
+
+            PlasmaComponents.Label {
+                text: "Fetching lyrics..."
+                visible: root.isLoadingLyrics && root.currentLyric.length === 0
+                opacity: 0.6
+                font.pointSize: 14
+                horizontalAlignment: Text.AlignHCenter
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.verticalCenter: parent.verticalCenter
+            }
 
                         PlasmaComponents.Label {
                             text: root.currentLyric
@@ -423,6 +497,8 @@ PlasmoidItem {
                     root.prevLyric = ""
                     root.nextLyric = ""
                     root.errorMessage = ""
+                    root.lyricsRetryCount = 0
+                    lyricsRetryTimer.stop()
                     root.isLoadingLyrics = true
                     fetchLyrics()
                 }
@@ -449,6 +525,14 @@ PlasmoidItem {
         running: false
         repeat: true
         onTriggered: updateCurrentLyric()
+    }
+
+    Timer {
+        id: lyricsRetryTimer
+        interval: 1500
+        running: false
+        repeat: false
+        onTriggered: fetchLyrics()
     }
 
     Timer {
@@ -517,11 +601,7 @@ PlasmoidItem {
 
         var artist = formatUrlParam(trackArtist)
         var title = formatUrlParam(trackTitle)
-        var duration = Math.round(trackDuration / 1000)
-        var url = "https://lrclib.net/api/get?artist_name=" + artist + "&track_name=" + title
-        if (duration > 0) {
-            url += "&duration=" + duration
-        }
+        var url = "https://lrclib.net/api/search?artist_name=" + artist + "&track_name=" + title
         var xhr = new XMLHttpRequest()
         xhr.open("GET", url)
         xhr.onreadystatechange = function() {
@@ -532,18 +612,59 @@ PlasmoidItem {
                 root.isLoadingLyrics = false
                 if (xhr.status === 200) {
                     try {
-                        var data = JSON.parse(xhr.responseText)
-                        if (data.syncedLyrics) {
-                            saveCachedLyrics(trackKey, data.syncedLyrics)
-                            lyricsData = parseSyncedLyrics(data.syncedLyrics)
+                        var results = JSON.parse(xhr.responseText)
+                        var found = false
+                        var bestMatch = null
+                        var bestDiff = Infinity
+
+                        for (var i = 0; i < results.length; i++) {
+                            if (results[i].syncedLyrics) {
+                                var resultDuration = results[i].duration * 1000
+                                var diff = Math.abs(resultDuration - root.trackDuration)
+                                if (diff < bestDiff) {
+                                    bestDiff = diff
+                                    bestMatch = results[i]
+                                }
+                            }
+                        }
+
+                        if (bestMatch) {
+                            saveCachedLyrics(trackKey, bestMatch.syncedLyrics)
+                            lyricsData = parseSyncedLyrics(bestMatch.syncedLyrics)
+                            found = true
+                        }
+
+                        if (!found) {
+                            if (root.lyricsRetryCount < 2) {
+                                root.lyricsRetryCount++
+                                root.isLoadingLyrics = true
+                                lyricsRetryTimer.start()
+                            } else {
+                                errorMessage = "No synced lyrics available"
+                                root.lyricsRetryCount = 0
+                            }
                         } else {
-                            errorMessage = "No synced lyrics available"
+                            root.lyricsRetryCount = 0
                         }
                     } catch (e) {
-                        errorMessage = "Failed to parse lyrics data"
+                        if (root.lyricsRetryCount < 2) {
+                            root.lyricsRetryCount++
+                            root.isLoadingLyrics = true
+                            lyricsRetryTimer.start()
+                        } else {
+                            errorMessage = "Failed to parse lyrics data"
+                            root.lyricsRetryCount = 0
+                        }
                     }
                 } else {
-                    errorMessage = "Failed to fetch lyrics (HTTP " + xhr.status + ")"
+                    if (root.lyricsRetryCount < 2) {
+                        root.lyricsRetryCount++
+                        root.isLoadingLyrics = true
+                        lyricsRetryTimer.start()
+                    } else {
+                        errorMessage = "Failed to fetch lyrics (HTTP " + xhr.status + ")"
+                        root.lyricsRetryCount = 0
+                    }
                 }
             }
         }
@@ -596,6 +717,24 @@ PlasmoidItem {
             tx.executeSql("INSERT OR REPLACE INTO lyrics_cache (track_key, synced_lyrics, fetched_at) VALUES (?, ?, ?)",
                 [trackKey, syncedLyrics, Date.now()])
         })
+    }
+
+    function clearLyricsCache() {
+        if (!db) return
+        db.transaction(function(tx) {
+            tx.executeSql("DELETE FROM lyrics_cache")
+        })
+        lyricsData = []
+        currentLyric = ""
+    }
+
+    function clearCurrentSongCache() {
+        if (!db || !lastTrackKey) return
+        db.transaction(function(tx) {
+            tx.executeSql("DELETE FROM lyrics_cache WHERE track_key = ?", [lastTrackKey])
+        })
+        lyricsData = []
+        currentLyric = ""
     }
 
     function updateCurrentLyric() {
