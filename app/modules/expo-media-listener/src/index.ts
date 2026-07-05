@@ -79,3 +79,18 @@ export function addListeningStatusListener(
   );
   return () => subscription.remove();
 }
+
+export async function addPairingCode(code: string): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  return ExpoMediaListener.addPairingCode(code);
+}
+
+export async function removePairingCode(code: string): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  return ExpoMediaListener.removePairingCode(code);
+}
+
+export async function getPairingCodes(): Promise<string[]> {
+  if (Platform.OS !== 'android') return [];
+  return ExpoMediaListener.getPairingCodes();
+}
