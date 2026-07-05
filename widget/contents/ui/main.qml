@@ -173,29 +173,6 @@ PlasmoidItem {
                     fillMode: Image.PreserveAspectFit
                     visible: root.albumArtBase64.length > 0
                 }
-            PlasmaComponents.ToolButton {
-                id: cacheButton
-                icon.name: "edit-delete"
-                Layout.preferredWidth: 24
-                Layout.preferredHeight: 24
-                onClicked: cacheMenu.open(cacheButton)
-
-                PlasmaComponents.Menu {
-                    id: cacheMenu
-                    PlasmaComponents.MenuItem {
-                        text: "Clear Current Song"
-                        onClicked: clearCurrentSongCache()
-                    }
-                    PlasmaComponents.MenuItem {
-                        text: "Clear All Cache"
-                        onClicked: clearLyricsCache()
-                    }
-                }
-            }
-
-            Item {
-                Layout.fillWidth: true
-            }
         }
 
                 PlasmaComponents.Label {
@@ -296,57 +273,6 @@ PlasmoidItem {
                             wrapMode: Text.WordWrap
                             Behavior on opacity { NumberAnimation { duration: 200 } }
                         }
-        Item {
-            id: lyricsViewport
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            Layout.minimumHeight: 120
-            clip: true
-
-            PlasmaComponents.Label {
-                id: lyricsErrorLabel
-                text: "Lyric not found"
-                visible: root.errorMessage.length > 0 && root.currentLyric.length === 0
-                opacity: 0.6
-                font.pointSize: 14
-                font.bold: true
-                horizontalAlignment: Text.AlignHCenter
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.verticalCenter: parent.verticalCenter
-            }
-
-            PlasmaComponents.Label {
-                text: "\u21BB Tap to retry"
-                visible: root.errorMessage.length > 0 && root.currentLyric.length === 0
-                opacity: 0.4
-                font.pointSize: 9
-                horizontalAlignment: Text.AlignHCenter
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.top: lyricsErrorLabel.bottom
-                anchors.topMargin: 8
-
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        root.errorMessage = ""
-                        root.lyricsRetryCount = 0
-                        root.isLoadingLyrics = true
-                        fetchLyrics()
-                    }
-                }
-            }
-
-            PlasmaComponents.Label {
-                text: "Fetching lyrics..."
-                visible: root.isLoadingLyrics && root.currentLyric.length === 0
-                opacity: 0.6
-                font.pointSize: 14
-                horizontalAlignment: Text.AlignHCenter
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.verticalCenter: parent.verticalCenter
-            }
-
                         PlasmaComponents.Label {
                             text: root.currentLyric
                             visible: root.currentLyric.length > 0
