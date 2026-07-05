@@ -1,19 +1,22 @@
 package handler
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+
+	"lyrink/model"
 )
 
 const (
 	writeWait      = 10 * time.Second
 	pongWait       = 60 * time.Second
 	pingPeriod     = (pongWait * 9) / 10
-	maxMessageSize = 4096
+	maxMessageSize = 1024 * 64
 )
 
 var upgrader = websocket.Upgrader{
@@ -54,6 +57,21 @@ func (c *Client) readPump(hub *Hub) {
 		c.conn.SetReadDeadline(time.Now().Add(pongWait))
 		return nil
 	})
+
+	_, message, err := c.conn.ReadMessage()
+	if err != nil {
+		log.Printf("ws read error: %v", err)
+		return
+	}
+
+	var pairMsg model.PairMessage
+	if err := json.Unmarshal(message, &pairMsg); err != nil || pairMsg.Type != "pair" || pairMsg.Code == "" {
+		log.Printf("ws: expected pair message, got: %s", message)
+		return
+	}
+
+	c.code = pairMsg.Code
+	log.Printf("ws client paired with code: %s", c.code)
 
 	for {
 		_, _, err := c.conn.ReadMessage()
