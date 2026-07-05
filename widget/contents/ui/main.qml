@@ -173,7 +173,6 @@ PlasmoidItem {
                     fillMode: Image.PreserveAspectFit
                     visible: root.albumArtBase64.length > 0
                 }
-        }
 
                 PlasmaComponents.Label {
                     text: root.trackArtist
