@@ -32,9 +32,15 @@ PlasmoidItem {
     property var db: null
     property var currentXhr: null
     property int lyricsRetryCount: 0
+    property string pairingCode: plasmoid.configuration.pairingCode
+    property int activeTab: 0
 
     Component.onCompleted: {
         initDatabase()
+        if (root.pairingCode.length === 0) {
+            root.pairingCode = generatePairingCode()
+            plasmoid.configuration.pairingCode = root.pairingCode
+        }
     }
 
     onWsUrlChanged: {
@@ -85,33 +91,88 @@ PlasmoidItem {
         Layout.minimumHeight: 0
         spacing: 8
 
-        RowLayout {
+        PlasmaComponents.TabBar {
+            id: tabBar
             Layout.fillWidth: true
+            currentIndex: root.activeTab
+            onCurrentIndexChanged: root.activeTab = currentIndex
 
-            Rectangle {
-                width: 8
-                height: 8
-                radius: 4
-                color: root.connectionStatus === "Connected" ? "#2ecc71" :
-                       root.connectionStatus === "Reconnecting..." ? "#f39c12" : "#e74c3c"
+            PlasmaComponents.TabButton {
+                text: "Lyrics"
             }
-
-            PlasmaComponents.Label {
-                text: root.connectionStatus
-                font.pointSize: 8
-                opacity: 0.6
+            PlasmaComponents.TabButton {
+                text: "Pairing"
             }
+        }
 
-            PlasmaComponents.ToolButton {
-                icon.name: "view-refresh"
-                Layout.preferredWidth: 24
-                Layout.preferredHeight: 24
-                onClicked: {
-                    ws.active = false
-                    ws.active = root.wsUrl.length > 0
+        StackLayout {
+            currentIndex: tabBar.currentIndex
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+
+            ColumnLayout {
+                spacing: 8
+
+                RowLayout {
+                    Layout.fillWidth: true
+
+                    Rectangle {
+                        width: 8
+                        height: 8
+                        radius: 4
+                        color: root.connectionStatus === "Connected" ? "#2ecc71" :
+                               root.connectionStatus === "Reconnecting..." ? "#f39c12" : "#e74c3c"
+                    }
+
+                    PlasmaComponents.Label {
+                        text: root.connectionStatus
+                        font.pointSize: 8
+                        opacity: 0.6
+                    }
+
+                    PlasmaComponents.ToolButton {
+                        icon.name: "view-refresh"
+                        Layout.preferredWidth: 24
+                        Layout.preferredHeight: 24
+                        onClicked: {
+                            ws.active = false
+                            ws.active = root.wsUrl.length > 0
+                        }
+                    }
+
+                    PlasmaComponents.ToolButton {
+                        id: cacheButton
+                        icon.name: "edit-delete"
+                        Layout.preferredWidth: 24
+                        Layout.preferredHeight: 24
+                        onClicked: cacheMenu.open(cacheButton)
+
+                        PlasmaComponents.Menu {
+                            id: cacheMenu
+                            PlasmaComponents.MenuItem {
+                                text: "Clear Current Song"
+                                onClicked: clearCurrentSongCache()
+                            }
+                            PlasmaComponents.MenuItem {
+                                text: "Clear All Cache"
+                                onClicked: clearLyricsCache()
+                            }
+                        }
+                    }
+
+                    Item {
+                        Layout.fillWidth: true
+                    }
                 }
-            }
 
+                Image {
+                    source: root.albumArtBase64.length > 0 ? getAlbumArtSource(root.albumArtBase64) : ""
+                    Layout.preferredWidth: 200
+                    Layout.preferredHeight: 200
+                    Layout.alignment: Qt.AlignHCenter
+                    fillMode: Image.PreserveAspectFit
+                    visible: root.albumArtBase64.length > 0
+                }
             PlasmaComponents.ToolButton {
                 id: cacheButton
                 icon.name: "edit-delete"
@@ -137,34 +198,104 @@ PlasmoidItem {
             }
         }
 
-        Image {
-            source: root.albumArtBase64.length > 0 ? getAlbumArtSource(root.albumArtBase64) : ""
-            Layout.preferredWidth: 200
-            Layout.preferredHeight: 200
-            Layout.alignment: Qt.AlignHCenter
-            fillMode: Image.PreserveAspectFit
-            visible: root.albumArtBase64.length > 0
-        }
+                PlasmaComponents.Label {
+                    text: root.trackArtist
+                    font.pointSize: 10
+                    opacity: 0.7
+                    horizontalAlignment: Text.AlignHCenter
+                    Layout.fillWidth: true
+                }
 
-        PlasmaComponents.Label {
-            text: root.trackArtist
-            font.pointSize: 10
-            opacity: 0.7
-            horizontalAlignment: Text.AlignHCenter
-            Layout.fillWidth: true
-        }
+                PlasmaComponents.Label {
+                    text: root.trackTitle
+                    font.pointSize: 14
+                    font.bold: true
+                    wrapMode: Text.WordWrap
+                    horizontalAlignment: Text.AlignHCenter
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 8
+                    Layout.rightMargin: 8
+                }
 
-        PlasmaComponents.Label {
-            text: root.trackTitle
-            font.pointSize: 14
-            font.bold: true
-            wrapMode: Text.WordWrap
-            horizontalAlignment: Text.AlignHCenter
-            Layout.fillWidth: true
-            Layout.leftMargin: 8
-            Layout.rightMargin: 8
-        }
+                Item {
+                    id: lyricsViewport
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.minimumHeight: 120
+                    clip: true
 
+                    PlasmaComponents.Label {
+                        id: lyricsErrorLabel
+                        text: "Lyric not found"
+                        visible: root.errorMessage.length > 0 && root.currentLyric.length === 0
+                        opacity: 0.6
+                        font.pointSize: 14
+                        font.bold: true
+                        horizontalAlignment: Text.AlignHCenter
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    PlasmaComponents.Label {
+                        text: "\u21BB Tap to retry"
+                        visible: root.errorMessage.length > 0 && root.currentLyric.length === 0
+                        opacity: 0.4
+                        font.pointSize: 9
+                        horizontalAlignment: Text.AlignHCenter
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors.top: lyricsErrorLabel.bottom
+                        anchors.topMargin: 8
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                root.errorMessage = ""
+                                root.lyricsRetryCount = 0
+                                root.isLoadingLyrics = true
+                                fetchLyrics()
+                            }
+                        }
+                    }
+
+                    PlasmaComponents.Label {
+                        text: "Fetching lyrics..."
+                        visible: root.isLoadingLyrics && root.currentLyric.length === 0
+                        opacity: 0.6
+                        font.pointSize: 14
+                        horizontalAlignment: Text.AlignHCenter
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    PlasmaComponents.Label {
+                        text: "\u266A"
+                        visible: root.lyricsData.length > 0 && root.currentLyric.length === 0 && !root.isLoadingLyrics && root.errorMessage.length === 0
+                        opacity: 0.6
+                        font.pointSize: 24
+                        horizontalAlignment: Text.AlignHCenter
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    Column {
+                        id: lyricsColumn
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        y: parent.height / 2 - implicitHeight / 2 + root.lyricSlideOffset
+                        spacing: 8
+
+                        Behavior on y { NumberAnimation { duration: 300; easing.type: Easing.InOutQuad } }
+
+                        PlasmaComponents.Label {
+                            text: root.prevLyric
+                            visible: root.prevLyric.length > 0
+                            opacity: 0.4
+                            font.pointSize: 10
+                            horizontalAlignment: Text.AlignHCenter
+                            width: lyricsViewport.width
+                            wrapMode: Text.WordWrap
+                            Behavior on opacity { NumberAnimation { duration: 200 } }
+                        }
         Item {
             id: lyricsViewport
             Layout.fillWidth: true
@@ -216,57 +347,83 @@ PlasmoidItem {
                 anchors.verticalCenter: parent.verticalCenter
             }
 
-            PlasmaComponents.Label {
-                text: "\u266A"
-                visible: root.lyricsData.length > 0 && root.currentLyric.length === 0 && !root.isLoadingLyrics && root.errorMessage.length === 0
-                opacity: 0.6
-                font.pointSize: 24
-                horizontalAlignment: Text.AlignHCenter
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.verticalCenter: parent.verticalCenter
+                        PlasmaComponents.Label {
+                            text: root.currentLyric
+                            visible: root.currentLyric.length > 0
+                            opacity: 1.0
+                            font.pointSize: 14
+                            font.bold: true
+                            horizontalAlignment: Text.AlignHCenter
+                            width: lyricsViewport.width
+                            wrapMode: Text.WordWrap
+                            Behavior on opacity { NumberAnimation { duration: 200 } }
+                        }
+
+                        PlasmaComponents.Label {
+                            text: root.nextLyric
+                            visible: root.nextLyric.length > 0
+                            opacity: 0.4
+                            font.pointSize: 10
+                            horizontalAlignment: Text.AlignHCenter
+                            width: lyricsViewport.width
+                            wrapMode: Text.WordWrap
+                            Behavior on opacity { NumberAnimation { duration: 200 } }
+                        }
+                    }
+                }
             }
 
-            Column {
-                id: lyricsColumn
-                anchors.horizontalCenter: parent.horizontalCenter
-                y: parent.height / 2 - implicitHeight / 2 + root.lyricSlideOffset
+            ColumnLayout {
                 spacing: 8
 
-                Behavior on y { NumberAnimation { duration: 300; easing.type: Easing.InOutQuad } }
+                Item { Layout.fillHeight: true }
 
                 PlasmaComponents.Label {
-                    text: root.prevLyric
-                    visible: root.prevLyric.length > 0
-                    opacity: 0.4
-                    font.pointSize: 10
-                    horizontalAlignment: Text.AlignHCenter
-                    width: lyricsViewport.width
-                    wrapMode: Text.WordWrap
-                    Behavior on opacity { NumberAnimation { duration: 200 } }
-                }
-
-                PlasmaComponents.Label {
-                    text: root.currentLyric
-                    visible: root.currentLyric.length > 0
-                    opacity: 1.0
-                    font.pointSize: 14
+                    text: "Pairing Code"
+                    font.pointSize: 12
                     font.bold: true
                     horizontalAlignment: Text.AlignHCenter
-                    width: lyricsViewport.width
-                    wrapMode: Text.WordWrap
-                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                    Layout.fillWidth: true
+                }
+
+                Rectangle {
+                    Layout.preferredWidth: codeLabel.implicitWidth + 48
+                    Layout.preferredHeight: codeLabel.implicitHeight + 24
+                    Layout.alignment: Qt.AlignHCenter
+                    radius: 8
+                    color: "#2ecc71"
+                    border.width: 2
+                    border.color: "#27ae60"
+
+                    PlasmaComponents.Label {
+                        id: codeLabel
+                        anchors.centerIn: parent
+                        text: root.pairingCode
+                        font.pointSize: 24
+                        font.bold: true
+                        font.family: "monospace"
+                        color: "#ffffff"
+                        font.letterSpacing: 4
+                    }
                 }
 
                 PlasmaComponents.Label {
-                    text: root.nextLyric
-                    visible: root.nextLyric.length > 0
-                    opacity: 0.4
+                    text: "Enter this code in the\nLyrink app to pair"
                     font.pointSize: 10
+                    opacity: 0.7
                     horizontalAlignment: Text.AlignHCenter
-                    width: lyricsViewport.width
-                    wrapMode: Text.WordWrap
-                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                    Layout.fillWidth: true
                 }
+
+                PlasmaComponents.Label {
+                    text: "Code is fixed and never changes"
+                    font.pointSize: 8
+                    opacity: 0.4
+                    horizontalAlignment: Text.AlignHCenter
+                    Layout.fillWidth: true
+                }
+
+                Item { Layout.fillHeight: true }
             }
         }
     }
@@ -285,6 +442,7 @@ PlasmoidItem {
                 root.connectionStatus = "Connected"
                 root.lastMessageTime = Date.now()
                 reconnectTimer.stop()
+                sendPairMessage()
                 break
             case WebSocket.Closing:
                 root.connectionStatus = "Disconnecting..."
@@ -395,6 +553,20 @@ PlasmoidItem {
         id: lyricSlideResetTimer
         interval: 50
         onTriggered: root.lyricSlideOffset = 0
+    }
+
+    function generatePairingCode() {
+        var code = ""
+        for (var i = 0; i < 6; i++) {
+            code += Math.floor(Math.random() * 10).toString()
+        }
+        return code
+    }
+
+    function sendPairMessage() {
+        if (ws.status === WebSocket.Open && root.pairingCode.length > 0) {
+            ws.sendTextMessage('{"type":"pair","code":"' + root.pairingCode + '"}')
+        }
     }
 
     function getAlbumArtSource(base64) {

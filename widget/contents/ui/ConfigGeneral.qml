@@ -17,4 +17,27 @@ Kirigami.FormLayout {
             }
         }
     }
+
+    QQC2.TextField {
+        id: pairingCodeField
+        Kirigami.FormData.label: "Pairing Code:"
+        text: plasmoid.configuration.pairingCode
+        readOnly: true
+        selectByMouse: true
+        font.family: "monospace"
+        font.pointSize: 14
+
+        background: Rectangle {
+            radius: 4
+            color: pairingCodeField.readOnly ? "#f0f0f0" : "#ffffff"
+            border.width: 1
+            border.color: pairingCodeField.readOnly ? "#cccccc" : "#208AEF"
+        }
+    }
+
+    Kirigami.InlineMessage {
+        type: Kirigami.InlineMessage.Information
+        text: "This code is generated once and cannot be changed. Enter it in the Lyrink app to pair."
+        Layout.fillWidth: true
+    }
 }
