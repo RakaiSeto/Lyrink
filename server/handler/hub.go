@@ -9,11 +9,11 @@ import (
 type Client struct {
 	conn *websocket.Conn
 	send chan []byte
+	code string
 }
 
 type Hub struct {
 	clients    map[*Client]bool
-	broadcast  chan []byte
 	register   chan *Client
 	unregister chan *Client
 }
@@ -21,7 +21,6 @@ type Hub struct {
 func NewHub() *Hub {
 	return &Hub{
 		clients:    make(map[*Client]bool),
-		broadcast:  make(chan []byte, 256),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 	}
@@ -40,16 +39,28 @@ func (h *Hub) Run() {
 				close(client.send)
 			}
 			log.Printf("ws client disconnected, total: %d", len(h.clients))
+		}
+	}
+}
 
-		case message := <-h.broadcast:
-			for client := range h.clients {
-				select {
-				case client.send <- message:
-				default:
-					close(client.send)
-					delete(h.clients, client)
-				}
-			}
+func (h *Hub) RouteToCodes(codes []string, data []byte) {
+	codeSet := make(map[string]bool, len(codes))
+	for _, c := range codes {
+		codeSet[c] = true
+	}
+
+	for client := range h.clients {
+		if client.code == "" {
+			continue
+		}
+		if !codeSet[client.code] {
+			continue
+		}
+		select {
+		case client.send <- data:
+		default:
+			close(client.send)
+			delete(h.clients, client)
 		}
 	}
 }
