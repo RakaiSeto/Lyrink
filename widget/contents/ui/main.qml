@@ -529,9 +529,13 @@ PlasmoidItem {
         var url = "https://lrclib.net/api/search?artist_name=" + artist + "&track_name=" + title
         var xhr = new XMLHttpRequest()
         xhr.open("GET", url)
+        xhr.timeout = 8000
         xhr.onreadystatechange = function() {
             if (xhr.readyState === 4) {
-                root.currentXhr = null
+                if (root.currentXhr === xhr) {
+                    root.currentXhr = null
+                }
+                if (xhr.status === 0) return
                 var currentTrackKey = root.trackTitle + "|||" + root.trackArtist
                 if (currentTrackKey !== trackKey) return
                 root.isLoadingLyrics = false
@@ -591,6 +595,22 @@ PlasmoidItem {
                         root.lyricsRetryCount = 0
                     }
                 }
+            }
+        }
+        xhr.ontimeout = function() {
+            if (root.currentXhr === xhr) {
+                root.currentXhr = null
+            }
+            var currentTrackKey = root.trackTitle + "|||" + root.trackArtist
+            if (currentTrackKey !== trackKey) return
+            root.isLoadingLyrics = false
+            if (root.lyricsRetryCount < 2) {
+                root.lyricsRetryCount++
+                root.isLoadingLyrics = true
+                lyricsRetryTimer.start()
+            } else {
+                root.errorMessage = "Lyrics fetch timed out"
+                root.lyricsRetryCount = 0
             }
         }
         currentXhr = xhr
