@@ -32,4 +32,8 @@ export type ModuleDefinition = {
   isNotificationPermissionGranted(): Promise<boolean>;
   addListener(eventName: string): void;
   removeListeners(count: number): void;
+  sendControl(action: string): Promise<boolean>;
+  addPairingCode(code: string): Promise<void>;
+  removePairingCode(code: string): Promise<void>;
+  getPairingCodes(): Promise<string[]>;
 };
