@@ -10,6 +10,7 @@ import (
 type Client struct {
 	conn     *websocket.Conn
 	send     chan []byte
+	done     chan struct{}
 	code     string
 	deviceId string
 }
@@ -61,12 +62,11 @@ func (h *Hub) Run() {
 			}
 			for client := range h.clients {
 				if client.code == dm.senderCode && client != nil {
-					select {
-					case client.send <- dm.body:
-					default:
-						close(client.send)
-						delete(h.clients, client)
-					}
+				select {
+				case client.send <- dm.body:
+				default:
+					log.Printf("hub: send buffer full, dropping data for code=%q", client.code)
+				}
 				}
 			}
 
@@ -80,24 +80,22 @@ func (h *Hub) Run() {
 			}
 			for client := range h.clients {
 				if client.deviceId == msg.DeviceId {
-					select {
-					case client.send <- message:
-					default:
-						close(client.send)
-						delete(h.clients, client)
-					}
+				select {
+				case client.send <- message:
+				default:
+					log.Printf("hub: send buffer full, dropping control for deviceId=%q", msg.DeviceId)
+				}
 					break
 				}
 			}
 
 		case message := <-h.broadcast:
 			for client := range h.clients {
-				select {
-				case client.send <- message:
-				default:
-					close(client.send)
-					delete(h.clients, client)
-				}
+			select {
+			case client.send <- message:
+			default:
+				log.Printf("hub: send buffer full, dropping broadcast message")
+			}
 			}
 		}
 	}
