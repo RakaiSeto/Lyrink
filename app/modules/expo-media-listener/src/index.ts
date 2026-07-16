@@ -89,6 +89,10 @@ export async function removePairingCode(code: string): Promise<void> {
   if (Platform.OS !== 'android') return;
   return ExpoMediaListener.removePairingCode(code);
 }
+export async function sendControl(action: string): Promise<boolean> {
+  if (Platform.OS !== 'android') return false;
+  return ExpoMediaListener.sendControl(action);
+}
 
 export async function getPairingCodes(): Promise<string[]> {
   if (Platform.OS !== 'android') return [];

@@ -28,33 +28,51 @@ class MediaNotificationListenerService : NotificationListenerService() {
     @Volatile
     var currentMetadata: MediaMetadata? = null
       private set
+
+    private var instance: MediaNotificationListenerService? = null
+
+    fun sendControl(action: String): Boolean {
+      val ctrl = instance?.ytController ?: return false
+      val controls = ctrl.transportControls ?: return false
+      return when (action) {
+        "play" -> { controls.play(); true }
+        "pause" -> { controls.pause(); true }
+        "next" -> { controls.skipToNext(); true }
+        "previous" -> { controls.skipToPrevious(); true }
+        else -> false
+      }
+    }
   }
 
   private lateinit var sessionManager: MediaSessionManager
   private var ytController: MediaController? = null
   private var lastRawNotificationJson: String? = null
-
-  private val sessionListener = MediaSessionManager.OnActiveSessionsChangedListener { controllers ->
-    controllers?.let { onActiveSessionsChanged(it) }
-  }
-
-  private val controllerCallback = object : MediaController.Callback() {
-    override fun onPlaybackStateChanged(state: PlaybackState?) {
-      processMediaController(ytController)
+  private val sessionListener =
+    MediaSessionManager.OnActiveSessionsChangedListener { controllers ->
+      controllers?.let { onActiveSessionsChanged(it) }
     }
-    override fun onSessionDestroyed() {
-      ytController = null
-      currentMetadata = null
+
+  private val controllerCallback =
+    object : MediaController.Callback() {
+      override fun onPlaybackStateChanged(state: PlaybackState?) {
+        processMediaController(ytController)
+      }
+
+      override fun onMetadataChanged(metadata: android.media.MediaMetadata?) {
+        processMediaController(ytController)
+      }
     }
-  }
+
 
   override fun onCreate() {
     super.onCreate()
+    instance = this
     sessionManager = getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
   }
 
   override fun onListenerConnected() {
     super.onListenerConnected()
+    instance = this
     isListening = true
     Log.d(TAG, "Listener connected")
     MediaEventEmitter.emitListeningStatus(true)
@@ -72,6 +90,7 @@ class MediaNotificationListenerService : NotificationListenerService() {
     super.onListenerDisconnected()
     sessionManager.removeOnActiveSessionsChangedListener(sessionListener)
     releaseController()
+    instance = null
     isListening = false
     Log.d(TAG, "Listener disconnected")
     MediaEventEmitter.emitListeningStatus(false)
@@ -109,7 +128,34 @@ class MediaNotificationListenerService : NotificationListenerService() {
   }
 
   private fun processMediaController(controller: MediaController?) {
-    val meta = controller?.metadata ?: return
+    if (controller == null) return
+    ytController = controller
+    PlaybackStateReporter.onControlReceived = { action, position ->
+      when (action) {
+        "seek" -> {
+          Log.d(TAG, "Seeking to $position")
+          controller.transportControls.seekTo(position)
+        }
+        "play" -> {
+          Log.d(TAG, "Play")
+          controller.transportControls.play()
+        }
+        "pause" -> {
+          Log.d(TAG, "Pause")
+          controller.transportControls.pause()
+        }
+        "prev" -> {
+          Log.d(TAG, "Previous")
+          controller.transportControls.skipToPrevious()
+        }
+        "next" -> {
+          Log.d(TAG, "Next")
+          controller.transportControls.skipToNext()
+        }
+        else -> Log.w(TAG, "Unknown control action: $action")
+      }
+    }
+    val meta = controller.metadata ?: return
     val state = controller.playbackState
 
     val albumArtBitmap = meta.getBitmap("android.media.metadata.ALBUM_ART")

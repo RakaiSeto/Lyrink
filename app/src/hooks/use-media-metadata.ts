@@ -11,6 +11,7 @@ import {
   startForegroundService,
   stopForegroundService,
   isForegroundServiceRunning,
+  sendControl,
 } from '../../modules/expo-media-listener/src/index';
 
 import type { MediaMetadata } from '../../modules/expo-media-listener/src/types';
@@ -79,5 +80,6 @@ export function useMediaMetadata() {
     openSettings,
     refresh,
     toggleService,
+    sendControl,
   };
 }
