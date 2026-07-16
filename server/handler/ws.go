@@ -14,7 +14,7 @@ const (
 	writeWait      = 10 * time.Second
 	pongWait       = 60 * time.Second
 	pingPeriod     = (pongWait * 9) / 10
-	maxMessageSize = 65536 // 64KB for albumArtBase64
+	maxMessageSize = 524288 // 512KB — temp: album art base64 can exceed 64KB; migrate art to HTTP later
 )
 
 var upgrader = websocket.Upgrader{
@@ -39,6 +39,7 @@ func HandleWebSocket(hub *Hub) gin.HandlerFunc {
 		client := &Client{
 			conn: conn,
 			send: make(chan []byte, 256),
+			done: make(chan struct{}),
 		}
 
 		hub.register <- client
@@ -50,6 +51,7 @@ func HandleWebSocket(hub *Hub) gin.HandlerFunc {
 
 func (c *Client) readPump(hub *Hub) {
 	defer func() {
+		close(c.done)
 		hub.unregister <- c
 		c.conn.Close()
 	}()
@@ -108,7 +110,6 @@ func (c *Client) readPump(hub *Hub) {
 		}
 	}
 }
-
 func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
@@ -118,6 +119,8 @@ func (c *Client) writePump() {
 
 	for {
 		select {
+		case <-c.done:
+			return
 		case message, ok := <-c.send:
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
