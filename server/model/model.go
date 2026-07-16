@@ -1,21 +1,20 @@
 package model
 
-type PairMessage struct {
-	Type string `json:"type"`
-	Code string `json:"code"`
-}
-
 type DataRequest struct {
-	Title          string   `json:"title,omitempty"`
-	Artist         string   `json:"artist,omitempty"`
-	Album          string   `json:"album,omitempty"`
-	AlbumArtBase64 string   `json:"albumArtBase64,omitempty"`
-	Timestamp      int64    `json:"timestamp,omitempty"`
-	Position       int      `json:"position,omitempty"`
-	Duration       int      `json:"duration,omitempty"`
-	IsPlaying      bool     `json:"isPlaying,omitempty"`
-	State          string   `json:"state,omitempty"`
+	Title          string  `json:"title,omitempty"`
+	Artist         string  `json:"artist,omitempty"`
+	Album          string  `json:"album,omitempty"`
+	AlbumArtBase64 string  `json:"albumArtBase64,omitempty"`
+	Timestamp      int64   `json:"timestamp,omitempty"`
+	Position       int     `json:"position,omitempty"`
+	Duration       int     `json:"duration,omitempty"`
+	IsPlaying      bool    `json:"isPlaying,omitempty"`
+	State          string  `json:"state,omitempty"`
+	DeviceId       string  `json:"deviceId,omitempty"`
 	PairingCodes   []string `json:"pairingCodes,omitempty"`
+	Message        string  `json:"message,omitempty"`
+	Value          float64 `json:"value,omitempty"`
+	Tags           []string `json:"tags,omitempty"`
 }
 
 type DataResponse struct {
