@@ -1,26 +1,38 @@
 package handler
 
 import (
+	"encoding/json"
 	"log"
 
 	"github.com/gorilla/websocket"
 )
 
 type Client struct {
-	conn *websocket.Conn
-	send chan []byte
-	code string
+	conn     *websocket.Conn
+	send     chan []byte
+	code     string
+	deviceId string
 }
 
 type Hub struct {
 	clients    map[*Client]bool
+	data       chan dataMessage
+	control    chan []byte
+	broadcast  chan []byte
 	register   chan *Client
 	unregister chan *Client
 }
 
+type dataMessage struct {
+	senderCode string
+	body       []byte
+}
 func NewHub() *Hub {
 	return &Hub{
 		clients:    make(map[*Client]bool),
+		data:       make(chan dataMessage, 256),
+		control:    make(chan []byte, 256),
+		broadcast:  make(chan []byte, 256),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 	}
@@ -31,36 +43,70 @@ func (h *Hub) Run() {
 		select {
 		case client := <-h.register:
 			h.clients[client] = true
-			log.Printf("ws client connected, total: %d", len(h.clients))
+			log.Printf("ws client connected (code=%q deviceId=%q), total: %d",
+				client.code, client.deviceId, len(h.clients))
 
 		case client := <-h.unregister:
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
 				close(client.send)
+			} 
+			log.Printf("ws client disconnected (code=%q deviceId=%q), total: %d",
+				client.code, client.deviceId, len(h.clients))
+
+		case dm := <-h.data:
+			if dm.senderCode == "" {
+				log.Printf("hub: data message from unpaired client, ignoring")
+				continue
 			}
-			log.Printf("ws client disconnected, total: %d", len(h.clients))
+			for client := range h.clients {
+				if client.code == dm.senderCode && client != nil {
+					select {
+					case client.send <- dm.body:
+					default:
+						close(client.send)
+						delete(h.clients, client)
+					}
+				}
+			}
+
+		case message := <-h.control:
+			var msg struct {
+				DeviceId string `json:"deviceId"`
+			}
+			if err := json.Unmarshal(message, &msg); err != nil {
+				log.Printf("hub: failed to parse deviceId: %v", err)
+				continue
+			}
+			for client := range h.clients {
+				if client.deviceId == msg.DeviceId {
+					select {
+					case client.send <- message:
+					default:
+						close(client.send)
+						delete(h.clients, client)
+					}
+					break
+				}
+			}
+
+		case message := <-h.broadcast:
+			for client := range h.clients {
+				select {
+				case client.send <- message:
+				default:
+					close(client.send)
+					delete(h.clients, client)
+				}
+			}
 		}
 	}
 }
 
-func (h *Hub) RouteToCodes(codes []string, data []byte) {
-	codeSet := make(map[string]bool, len(codes))
-	for _, c := range codes {
-		codeSet[c] = true
-	}
+func (h *Hub) RouteData(senderCode string, body []byte) {
+	h.data <- dataMessage{senderCode: senderCode, body: body}
+}
 
-	for client := range h.clients {
-		if client.code == "" {
-			continue
-		}
-		if !codeSet[client.code] {
-			continue
-		}
-		select {
-		case client.send <- data:
-		default:
-			close(client.send)
-			delete(h.clients, client)
-		}
-	}
+func (h *Hub) RouteControl(deviceId string, body []byte) {
+	h.control <- body
 }
