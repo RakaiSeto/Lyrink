@@ -309,14 +309,14 @@ sudo apt install plasma-workspace libplasma6 \
 **Arch Linux:**
 
 ```bash
-sudo pacman -S plasma-workspace plasma-framework qt6-declarative \
+sudo pacman -S plasma-framework qt6-declarative \
   qt6-quickcontrols qt6-qtwebsockets-devel kirigami
 ```
 
 **Fedora:**
 
 ```bash
-sudo dnf install plasma-workspace plasma-framework qt6-qtdeclarative \
+sudo dnf install plasma-framework qt6-qtdeclarative \
   qt6-qtquickcontrols2 qt6-qtwebsockets-devel kf6-kirigami
 ```
 
@@ -331,7 +331,7 @@ wget https://github.com/rakaiss/Lyrink/releases/download/v<version>/lyrink-widge
 #### 3. Extract the Archive
 
 ```bash
-tar -xzf lyrink-widget-*.tar.gz
+mkdir lyrink-widget && tar -xzf lyrink-widget*.tar.gz -C lyrink-widget
 ```
 
 #### 4. Install the Widget
@@ -339,14 +339,14 @@ tar -xzf lyrink-widget-*.tar.gz
 **Method A: kpackagetool6 (Recommended)**
 
 ```bash
-kpackagetool6 -t Plasma/Applet -i ./widget
+kpackagetool6 -t Plasma/Applet -i ./lyrink-widget
 ```
 
 **Method B: Manual Installation**
 
 ```bash
 mkdir -p ~/.local/share/plasma/plasmoids
-cp -r widget ~/.local/share/plasma/plasmoids/com.github.lyrink.helloworld
+cp -r lyrink-widget ~/.local/share/plasma/plasmoids/com.github.lyrink.helloworld
 ```
 
 #### 5. Restart Plasma
@@ -361,13 +361,7 @@ kquitapp6 plasmashell && kstart plasmashell
 2. Search for **"Lyrink"**
 3. Click to add it to your desktop or panel
 
-#### 7. Configure the Widget
-
-1. Right-click the widget → **Configure**
-2. Set the **WebSocket URL** (default: `wss://api-lyrink.rakaiseto.com/ws`)
-3. Click **Apply**
-
-#### 8. Verify Installation
+#### 7. Verify Installation
 
 ```bash
 kpackagetool6 -t Plasma/Applet -l | grep lyrink

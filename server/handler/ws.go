@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"time"
@@ -13,13 +14,18 @@ const (
 	writeWait      = 10 * time.Second
 	pongWait       = 60 * time.Second
 	pingPeriod     = (pongWait * 9) / 10
-	maxMessageSize = 4096
+	maxMessageSize = 524288 // 512KB — temp: album art base64 can exceed 64KB; migrate art to HTTP later
 )
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},
+}
+
+type wsMessage struct {
+	Type     string `json:"type"`
+	DeviceId string `json:"deviceId,omitempty"`
 }
 
 func HandleWebSocket(hub *Hub) gin.HandlerFunc {
@@ -33,6 +39,7 @@ func HandleWebSocket(hub *Hub) gin.HandlerFunc {
 		client := &Client{
 			conn: conn,
 			send: make(chan []byte, 256),
+			done: make(chan struct{}),
 		}
 
 		hub.register <- client
@@ -44,6 +51,7 @@ func HandleWebSocket(hub *Hub) gin.HandlerFunc {
 
 func (c *Client) readPump(hub *Hub) {
 	defer func() {
+		close(c.done)
 		hub.unregister <- c
 		c.conn.Close()
 	}()
@@ -55,14 +63,53 @@ func (c *Client) readPump(hub *Hub) {
 		return nil
 	})
 
+	// First message must be a pair message
+	_, raw, err := c.conn.ReadMessage()
+	if err != nil {
+		log.Printf("pair message read error: %v", err)
+		return
+	}
+
+	var pairMsg struct {
+		Type     string `json:"type"`
+		Code     string `json:"code"`
+		DeviceId string `json:"deviceId"`
+	}
+	if err := json.Unmarshal(raw, &pairMsg); err != nil {
+		log.Printf("pair message parse error: %v", err)
+		return
+	}
+	if pairMsg.Type != "pair" || pairMsg.Code == "" {
+		log.Printf("invalid pair message: type=%q code=%q", pairMsg.Type, pairMsg.Code)
+		return
+	}
+
+	c.code = pairMsg.Code
+	c.deviceId = pairMsg.DeviceId
+
+	// Subsequent messages
 	for {
-		_, _, err := c.conn.ReadMessage()
+		_, raw, err := c.conn.ReadMessage()
 		if err != nil {
 			break
 		}
+
+		var msg wsMessage
+		if err := json.Unmarshal(raw, &msg); err != nil {
+			log.Printf("message parse error: %v", err)
+			continue
+		}
+
+		switch msg.Type {
+		case "data":
+			hub.RouteData(c.code, raw)
+		case "control":
+			hub.RouteControl(msg.DeviceId, raw)
+		default:
+			log.Printf("unknown message type: %s", msg.Type)
+		}
 	}
 }
-
 func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
@@ -72,6 +119,8 @@ func (c *Client) writePump() {
 
 	for {
 		select {
+		case <-c.done:
+			return
 		case message, ok := <-c.send:
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -9,6 +10,8 @@ import (
 
 func HandlePost(hub *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		log.Printf("DEPRECATED: POST /api/data called; use WebSocket instead")
+
 		body, err := io.ReadAll(c.Request.Body)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{

@@ -10,6 +10,8 @@ type DataRequest struct {
 	Duration       int     `json:"duration,omitempty"`
 	IsPlaying      bool    `json:"isPlaying,omitempty"`
 	State          string  `json:"state,omitempty"`
+	DeviceId       string  `json:"deviceId,omitempty"`
+	PairingCodes   []string `json:"pairingCodes,omitempty"`
 	Message        string  `json:"message,omitempty"`
 	Value          float64 `json:"value,omitempty"`
 	Tags           []string `json:"tags,omitempty"`
