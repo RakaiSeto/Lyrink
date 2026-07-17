@@ -1,48 +1,31 @@
 package handler
 
 import (
-	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-
-	"lyrink/model"
 )
 
 func HandlePost(hub *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		log.Printf("DEPRECATED: POST /api/data called; use WebSocket instead")
+
 		body, err := io.ReadAll(c.Request.Body)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, model.DataResponse{
-				Status:  "error",
-				Message: "failed to read body",
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  "error",
+				"message": "failed to read body",
 			})
 			return
 		}
 
-		var req model.DataRequest
-		if err := json.Unmarshal(body, &req); err != nil {
-			c.JSON(http.StatusBadRequest, model.DataResponse{
-				Status:  "error",
-				Message: "invalid JSON",
-			})
-			return
-		}
+		hub.broadcast <- body
 
-		if len(req.PairingCodes) == 0 {
-			c.JSON(http.StatusBadRequest, model.DataResponse{
-				Status:  "error",
-				Message: "pairingCodes is required",
-			})
-			return
-		}
-
-		hub.RouteToCodes(req.PairingCodes, body)
-
-		c.JSON(http.StatusOK, model.DataResponse{
-			Status:  "ok",
-			Message: "forwarded to clients",
+		c.JSON(http.StatusOK, gin.H{
+			"status":  "ok",
+			"message": "forwarded to clients",
 		})
 	}
 }

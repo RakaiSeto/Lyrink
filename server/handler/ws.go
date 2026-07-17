@@ -8,21 +8,24 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-
-	"lyrink/model"
 )
 
 const (
 	writeWait      = 10 * time.Second
 	pongWait       = 60 * time.Second
 	pingPeriod     = (pongWait * 9) / 10
-	maxMessageSize = 1024 * 64
+	maxMessageSize = 524288 // 512KB — temp: album art base64 can exceed 64KB; migrate art to HTTP later
 )
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},
+}
+
+type wsMessage struct {
+	Type     string `json:"type"`
+	DeviceId string `json:"deviceId,omitempty"`
 }
 
 func HandleWebSocket(hub *Hub) gin.HandlerFunc {
@@ -36,6 +39,7 @@ func HandleWebSocket(hub *Hub) gin.HandlerFunc {
 		client := &Client{
 			conn: conn,
 			send: make(chan []byte, 256),
+			done: make(chan struct{}),
 		}
 
 		hub.register <- client
@@ -47,6 +51,7 @@ func HandleWebSocket(hub *Hub) gin.HandlerFunc {
 
 func (c *Client) readPump(hub *Hub) {
 	defer func() {
+		close(c.done)
 		hub.unregister <- c
 		c.conn.Close()
 	}()
@@ -58,29 +63,53 @@ func (c *Client) readPump(hub *Hub) {
 		return nil
 	})
 
-	_, message, err := c.conn.ReadMessage()
+	// First message must be a pair message
+	_, raw, err := c.conn.ReadMessage()
 	if err != nil {
-		log.Printf("ws read error: %v", err)
+		log.Printf("pair message read error: %v", err)
 		return
 	}
 
-	var pairMsg model.PairMessage
-	if err := json.Unmarshal(message, &pairMsg); err != nil || pairMsg.Type != "pair" || pairMsg.Code == "" {
-		log.Printf("ws: expected pair message, got: %s", message)
+	var pairMsg struct {
+		Type     string `json:"type"`
+		Code     string `json:"code"`
+		DeviceId string `json:"deviceId"`
+	}
+	if err := json.Unmarshal(raw, &pairMsg); err != nil {
+		log.Printf("pair message parse error: %v", err)
+		return
+	}
+	if pairMsg.Type != "pair" || pairMsg.Code == "" {
+		log.Printf("invalid pair message: type=%q code=%q", pairMsg.Type, pairMsg.Code)
 		return
 	}
 
 	c.code = pairMsg.Code
-	log.Printf("ws client paired with code: %s", c.code)
+	c.deviceId = pairMsg.DeviceId
 
+	// Subsequent messages
 	for {
-		_, _, err := c.conn.ReadMessage()
+		_, raw, err := c.conn.ReadMessage()
 		if err != nil {
 			break
 		}
+
+		var msg wsMessage
+		if err := json.Unmarshal(raw, &msg); err != nil {
+			log.Printf("message parse error: %v", err)
+			continue
+		}
+
+		switch msg.Type {
+		case "data":
+			hub.RouteData(c.code, raw)
+		case "control":
+			hub.RouteControl(msg.DeviceId, raw)
+		default:
+			log.Printf("unknown message type: %s", msg.Type)
+		}
 	}
 }
-
 func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
@@ -90,6 +119,8 @@ func (c *Client) writePump() {
 
 	for {
 		select {
+		case <-c.done:
+			return
 		case message, ok := <-c.send:
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
