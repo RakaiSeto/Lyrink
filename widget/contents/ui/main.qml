@@ -137,7 +137,7 @@ PlasmoidItem {
 
             // ---- Lyrics Tab ----
             ColumnLayout {
-                spacing: 8
+                spacing: 4
 
                 RowLayout {
                     Layout.fillWidth: true
@@ -875,6 +875,10 @@ PlasmoidItem {
             prevLyric = newPrev
             currentLyric = newCurrent
             nextLyric = newNext
+        } else if (currentLyric.length > 0) {
+            currentLyric = ""
+            prevLyric = ""
+            nextLyric = ""
         }
     }
 }
