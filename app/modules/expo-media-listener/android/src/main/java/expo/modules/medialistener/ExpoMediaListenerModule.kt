@@ -133,6 +133,9 @@ class ExpoMediaListenerModule : Module() {
       val codes = getCodes(prefs)
       codes.toList()
     }
+    Function("sendControl") { action: String ->
+      MediaNotificationListenerService.sendControl(action)
+    }
 
     OnCreate {
       metadataCallback = { metadata ->

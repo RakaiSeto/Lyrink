@@ -1,6 +1,7 @@
 import * as Device from 'expo-device';
 import { useEffect, useRef, useState } from 'react';
 import { Image, Platform, Pressable, StyleSheet, View } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedIcon } from '@/components/animated-icon';
@@ -38,7 +39,7 @@ function formatTime(ms: number): string {
 }
 
 function NowPlayingCard() {
-  const { metadata, permissionGranted, openSettings, isListening, serviceRunning, toggleService } =
+  const { metadata, permissionGranted, openSettings, isListening, serviceRunning, toggleService, sendControl } =
     useMediaMetadata();
 
   const [displayPosition, setDisplayPosition] = useState(0);
@@ -127,37 +128,36 @@ function NowPlayingCard() {
               <Image source={{ uri: metadata.albumArtUri }} style={styles.albumArt} />
             ) : (
               <ThemedView style={[styles.albumArt, styles.albumArtPlaceholder]}>
-                <ThemedText type="title" style={styles.albumArtText}>
-                  ♪
-                </ThemedText>
+                <Ionicons name="musical-notes" size={48} color="#888" />
               </ThemedView>
             )}
 
             <ThemedView style={styles.songInfo}>
               {metadata.album && (
                 <ThemedView style={styles.albumLabel}>
-                  <ThemedText type="small" style={styles.albumLabelText}>
-                    ♪ {metadata.album.toUpperCase()}
+                  <Ionicons name="disc" size={12} color="#208AEF" style={styles.albumLabelIcon} />
+                  <ThemedText type="small" style={styles.albumLabelText} numberOfLines={1} ellipsizeMode="tail">
+                    {metadata.album.toUpperCase()}
                   </ThemedText>
                 </ThemedView>
               )}
-              <ThemedText style={styles.songTitle}>
+              <ThemedText style={styles.songTitle} numberOfLines={2} ellipsizeMode="tail">
                 {metadata.title}
               </ThemedText>
               {metadata.artist && (
                 <ThemedView style={styles.artistRow}>
-                  <ThemedText type="small" style={styles.artistIcon}>
-                    •
-                  </ThemedText>
-                  <ThemedText type="small">
+                  <Ionicons name="person" size={12} color="#208AEF" />
+                  <ThemedText type="small" numberOfLines={1} ellipsizeMode="tail">
                     {metadata.artist}
                   </ThemedText>
                 </ThemedView>
               )}
               <ThemedView style={styles.statusRow}>
-                <ThemedText style={[styles.statusIcon, metadata.isPlaying && styles.statusIconPlaying]}>
-                  {metadata.isPlaying ? '▸' : '‖'}
-                </ThemedText>
+                <Ionicons
+                  name={metadata.isPlaying ? 'play' : 'pause'}
+                  size={14}
+                  color="#208AEF"
+                />
                 <ThemedText type="small">
                   {metadata.isPlaying ? 'Playing' : 'Paused'}
                 </ThemedText>
@@ -182,6 +182,30 @@ function NowPlayingCard() {
               </View>
             </View>
           )}
+          <View style={styles.controlRow}>
+            <Pressable
+              style={styles.controlButton}
+              onPress={() => sendControl('previous')}
+            >
+              <Ionicons name="play-skip-back" size={20} color="#FFF" />
+            </Pressable>
+            <Pressable
+              style={styles.controlButtonPrimary}
+              onPress={() => sendControl(metadata.isPlaying ? 'pause' : 'play')}
+            >
+              <Ionicons
+                name={metadata.isPlaying ? 'pause' : 'play'}
+                size={28}
+                color="#FFF"
+              />
+            </Pressable>
+            <Pressable
+              style={styles.controlButton}
+              onPress={() => sendControl('next')}
+            >
+              <Ionicons name="play-skip-forward" size={20} color="#FFF" />
+            </Pressable>
+          </View>
         </>
       ) : (
         <ThemedView style={styles.noMusicContainer}>
@@ -324,9 +348,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  albumArtText: {
-    color: '#FFF',
-  },
   progressSection: {
     marginTop: Spacing.one,
   },
@@ -351,17 +372,48 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     minWidth: 32,
   },
+  controlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.three,
+    marginTop: Spacing.two,
+  },
+  controlButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(180, 180, 180, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  controlButtonPrimary: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#208AEF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   songInfo: {
     flex: 1,
     gap: Spacing.one,
     overflow: 'hidden',
   },
   albumLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
     alignSelf: 'flex-start',
     backgroundColor: '#208AEF33',
     paddingHorizontal: Spacing.two,
     paddingVertical: Spacing.half,
     borderRadius: Spacing.one,
+    maxWidth: '100%',
+    overflow: 'hidden',
+    gap: Spacing.half,
+  },
+  albumLabelIcon: {
+    marginRight: 2,
   },
   albumLabelText: {
     fontSize: 11,
@@ -372,16 +424,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.one,
-    alignSelf: 'flex-start',
     flexShrink: 1,
     paddingHorizontal: Spacing.two,
     paddingVertical: Spacing.half,
     borderRadius: Spacing.five,
     backgroundColor: '#208AEF55',
-  },
-  artistIcon: {
-    fontSize: 12,
-    color: '#208AEF',
   },
   statusRow: {
     flexDirection: 'row',
@@ -393,13 +440,6 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.half,
     borderRadius: Spacing.five,
     backgroundColor: '#208AEF55',
-  },
-  statusIcon: {
-    fontSize: 14,
-    color: '#208AEF',
-  },
-  statusIconPlaying: {
-    color: '#208AEF',
   },
   songTitle: {
     fontSize: 18,
