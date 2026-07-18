@@ -136,6 +136,7 @@ object PlaybackStateReporter {
       } catch (_: InterruptedException) {
         return@Thread
       }
+      lock.withLock { reconnectScheduled = false }
       Log.d(TAG, "Reconnecting (attempt $reconnectAttempt, delay ${delay}ms)...")
       connect()
     }.also { it.isDaemon = true; it.start() }
@@ -163,6 +164,7 @@ object PlaybackStateReporter {
       put("title", metadata.title ?: JSONObject.NULL)
       put("artist", metadata.artist ?: JSONObject.NULL)
       put("album", metadata.album ?: JSONObject.NULL)
+      put("albumArtBase64", metadata.albumArtBase64 ?: JSONObject.NULL)
       put("timestamp", metadata.capturedAtMs)
       put("position", metadata.playbackPosition)
       put("duration", metadata.duration)
