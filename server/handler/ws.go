@@ -71,9 +71,10 @@ func (c *Client) readPump(hub *Hub) {
 	}
 
 	var pairMsg struct {
-		Type     string `json:"type"`
-		Code     string `json:"code"`
-		DeviceId string `json:"deviceId"`
+		Type       string `json:"type"`
+		Code       string `json:"code"`
+		DeviceId   string `json:"deviceId"`
+		ClientType string `json:"clientType"`
 	}
 	if err := json.Unmarshal(raw, &pairMsg); err != nil {
 		log.Printf("pair message parse error: %v", err)
@@ -86,6 +87,7 @@ func (c *Client) readPump(hub *Hub) {
 
 	c.code = pairMsg.Code
 	c.deviceId = pairMsg.DeviceId
+	c.clientType = pairMsg.ClientType
 
 	// Subsequent messages
 	for {
