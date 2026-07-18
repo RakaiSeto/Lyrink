@@ -37,6 +37,23 @@ PlasmoidItem {
     property string deviceId: ""
     property double displayPosition: 0
     property bool isSeeking: false
+    property bool phoneConnected: false
+    toolTipItem: Column {
+        spacing: 2
+        PlasmaComponents.Label {
+            text: "Lyrink"
+            font.bold: true
+        }
+        PlasmaComponents.Label {
+            text: "youtube music"
+            font.pointSize: 9
+            opacity: 0.5
+        }
+        PlasmaComponents.Label {
+            text: root.trackTitle.length > 0 ? root.trackTitle + " - " + root.trackArtist : ""
+            opacity: 0.7
+        }
+    }
 
     Component.onCompleted: {
         initDatabase()
@@ -120,7 +137,7 @@ PlasmoidItem {
 
             // ---- Lyrics Tab ----
             ColumnLayout {
-                spacing: 8
+                spacing: 4
 
                 RowLayout {
                     Layout.fillWidth: true
@@ -137,6 +154,20 @@ PlasmoidItem {
                         text: root.connectionStatus
                         font.pointSize: 8
                         opacity: 0.6
+                    }
+                    Rectangle {
+                        width: 8
+                        height: 8
+                        radius: 4
+                        color: root.connectionStatus === "Connected" ? (root.phoneConnected ? "#2ecc71" : "#e74c3c") : "transparent"
+                        visible: root.connectionStatus === "Connected"
+                    }
+
+                    PlasmaComponents.Label {
+                        text: root.connectionStatus === "Connected" ? (root.phoneConnected ? "Phone" : "Phone off") : ""
+                        font.pointSize: 8
+                        opacity: 0.6
+                        visible: root.connectionStatus === "Connected"
                     }
 
                     PlasmaComponents.ToolButton {
@@ -180,30 +211,10 @@ PlasmoidItem {
                     fillMode: Image.PreserveAspectFit
                     visible: root.albumArtBase64.length > 0
                 }
-            PlasmaComponents.ToolButton {
-                id: cacheButton
-                icon.name: "edit-delete"
-                Layout.preferredWidth: 24
-                Layout.preferredHeight: 24
-                onClicked: cacheMenu.open(cacheButton)
 
-                PlasmaComponents.Menu {
-                    id: cacheMenu
-                    PlasmaComponents.MenuItem {
-                        text: "Clear Current Song"
-                        onClicked: clearCurrentSongCache()
-                    }
-                    PlasmaComponents.MenuItem {
-                        text: "Clear All Cache"
-                        onClicked: clearLyricsCache()
-                    }
+                Item {
+                    Layout.fillWidth: true
                 }
-            }
-
-            Item {
-                Layout.fillWidth: true
-            }
-        }
 
                 PlasmaComponents.Label {
                     text: root.trackArtist
@@ -230,6 +241,7 @@ PlasmoidItem {
                     Layout.leftMargin: 8
                     Layout.rightMargin: 8
                     visible: root.trackDuration > 0
+
 
                     PlasmaComponents.Label {
                         text: root.formatTime(root.displayPosition)
@@ -260,6 +272,16 @@ PlasmoidItem {
                         opacity: 0.6
                         Layout.preferredWidth: 32
                     }
+                }
+
+                // Source label
+                PlasmaComponents.Label {
+                    text: "youtube music"
+                    font.pointSize: 9
+                    opacity: 0.5
+                    horizontalAlignment: Text.AlignHCenter
+                    Layout.fillWidth: true
+                    Layout.topMargin: 4
                 }
 
                 // Playback controls
@@ -370,56 +392,6 @@ PlasmoidItem {
                             wrapMode: Text.WordWrap
                             Behavior on opacity { NumberAnimation { duration: 200 } }
                         }
-        Item {
-            id: lyricsViewport
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            Layout.minimumHeight: 120
-            clip: true
-
-            PlasmaComponents.Label {
-                id: lyricsErrorLabel
-                text: "Lyric not found"
-                visible: root.errorMessage.length > 0 && root.currentLyric.length === 0
-                opacity: 0.6
-                font.pointSize: 14
-                font.bold: true
-                horizontalAlignment: Text.AlignHCenter
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.verticalCenter: parent.verticalCenter
-            }
-
-            PlasmaComponents.Label {
-                text: "\u21BB Tap to retry"
-                visible: root.errorMessage.length > 0 && root.currentLyric.length === 0
-                opacity: 0.4
-                font.pointSize: 9
-                horizontalAlignment: Text.AlignHCenter
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.top: lyricsErrorLabel.bottom
-                anchors.topMargin: 8
-
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        root.errorMessage = ""
-                        root.lyricsRetryCount = 0
-                        root.isLoadingLyrics = true
-                        fetchLyrics()
-                    }
-                }
-            }
-
-            PlasmaComponents.Label {
-                text: "Fetching lyrics..."
-                visible: root.isLoadingLyrics && root.currentLyric.length === 0
-                opacity: 0.6
-                font.pointSize: 14
-                horizontalAlignment: Text.AlignHCenter
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.verticalCenter: parent.verticalCenter
-            }
                         PlasmaComponents.Label {
                             text: root.currentLyric
                             visible: root.currentLyric.length > 0
@@ -431,7 +403,6 @@ PlasmoidItem {
                             wrapMode: Text.WordWrap
                             Behavior on opacity { NumberAnimation { duration: 200 } }
                         }
-
                         PlasmaComponents.Label {
                             text: root.nextLyric
                             visible: root.nextLyric.length > 0
@@ -502,6 +473,7 @@ PlasmoidItem {
         }
     }
 
+
     WebSocket {
         id: ws
         url: root.wsUrl
@@ -516,19 +488,19 @@ PlasmoidItem {
                 root.connectionStatus = "Connected"
                 root.lastMessageTime = Date.now()
                 reconnectTimer.stop()
-                if (root.pairingCode.length > 0) {
-                    ws.sendTextMessage(JSON.stringify({"type": "pair", "code": root.pairingCode}))
-                }
+                sendPairMessage()
                 break
             case WebSocket.Closing:
                 root.connectionStatus = "Disconnecting..."
                 break
             case WebSocket.Closed:
                 root.connectionStatus = "Reconnecting..."
+                root.phoneConnected = false
                 reconnectTimer.start()
                 break
             case WebSocket.Error:
                 root.connectionStatus = "Reconnecting..."
+                root.phoneConnected = false
                 reconnectTimer.start()
                 break
             }
@@ -539,6 +511,10 @@ PlasmoidItem {
             reconnectTimer.stop()
             try {
                 var json = JSON.parse(message)
+                if (json.type === "status") {
+                    root.phoneConnected = json.phoneConnected === true
+                    return
+                }
                 if (json.albumArtBase64) {
                     root.albumArtBase64 = json.albumArtBase64
                 }
@@ -562,124 +538,6 @@ PlasmoidItem {
                 }
                 if (json.deviceId !== undefined) {
                     root.deviceId = json.deviceId
-                }
-                if (root.isPlaying) {
-                    stopPlayback()
-                } else {
-                    startPlayback()
-                }
-            }
-
-            ColumnLayout {
-                spacing: 8
-
-                Item { Layout.fillHeight: true }
-
-                PlasmaComponents.Label {
-                    text: "Pairing Code"
-                    font.pointSize: 12
-                    font.bold: true
-                    horizontalAlignment: Text.AlignHCenter
-                    Layout.fillWidth: true
-                }
-
-                Rectangle {
-                    Layout.preferredWidth: codeLabel.implicitWidth + 48
-                    Layout.preferredHeight: codeLabel.implicitHeight + 24
-                    Layout.alignment: Qt.AlignHCenter
-                    radius: 8
-                    color: "#2ecc71"
-                    border.width: 2
-                    border.color: "#27ae60"
-
-                    PlasmaComponents.Label {
-                        id: codeLabel
-                        anchors.centerIn: parent
-                        text: root.pairingCode
-                        font.pointSize: 24
-                        font.bold: true
-                        font.family: "monospace"
-                        color: "#ffffff"
-                        font.letterSpacing: 4
-                    }
-                }
-
-                PlasmaComponents.Label {
-                    text: "Enter this code in the\nLyrink app to pair"
-                    font.pointSize: 10
-                    opacity: 0.7
-                    horizontalAlignment: Text.AlignHCenter
-                    Layout.fillWidth: true
-                }
-
-                PlasmaComponents.Label {
-                    text: "Code is fixed and never changes"
-                    font.pointSize: 8
-                    opacity: 0.4
-                    horizontalAlignment: Text.AlignHCenter
-                    Layout.fillWidth: true
-                }
-
-                Item { Layout.fillHeight: true }
-            }
-        }
-    }
-
-    WebSocket {
-        id: ws
-        url: root.wsUrl
-        active: root.wsUrl.length > 0
-
-        onStatusChanged: {
-            switch (ws.status) {
-            case WebSocket.Connecting:
-                root.connectionStatus = "Connecting..."
-                break
-            case WebSocket.Open:
-                root.connectionStatus = "Connected"
-                root.lastMessageTime = Date.now()
-                reconnectTimer.stop()
-                sendPairMessage()
-                break
-            case WebSocket.Closing:
-                root.connectionStatus = "Disconnecting..."
-                break
-            case WebSocket.Closed:
-                root.connectionStatus = "Reconnecting..."
-                reconnectTimer.start()
-                break
-            case WebSocket.Error:
-                root.connectionStatus = "Reconnecting..."
-                reconnectTimer.start()
-                break
-            }
-        }
-
-        onTextMessageReceived: function(message) {
-            root.lastMessageTime = Date.now()
-            reconnectTimer.stop()
-            try {
-                var json = JSON.parse(message)
-                if (json.albumArtBase64) {
-                    root.albumArtBase64 = json.albumArtBase64
-                }
-                if (json.title !== undefined) {
-                    root.trackTitle = json.title
-                }
-                if (json.artist !== undefined) {
-                    root.trackArtist = json.artist
-                }
-                if (json.timestamp !== undefined) {
-                    root.deviceTimestamp = json.timestamp
-                }
-                if (json.position !== undefined) {
-                    root.devicePosition = json.position
-                }
-                if (json.duration !== undefined) {
-                    root.trackDuration = json.duration
-                }
-                if (json.isPlaying !== undefined) {
-                    root.isPlaying = json.isPlaying
                 }
                 if (root.isPlaying) {
                     lyricTimer.start()
@@ -762,7 +620,7 @@ PlasmoidItem {
 
     function sendPairMessage() {
         if (ws.status === WebSocket.Open && root.pairingCode.length > 0) {
-            ws.sendTextMessage('{"type":"pair","code":"' + root.pairingCode + '"}')
+            ws.sendTextMessage(JSON.stringify({"type": "pair", "code": root.pairingCode, "clientType": "widget"}))
         }
     }
 
@@ -1017,6 +875,10 @@ PlasmoidItem {
             prevLyric = newPrev
             currentLyric = newCurrent
             nextLyric = newNext
+        } else if (currentLyric.length > 0) {
+            currentLyric = ""
+            prevLyric = ""
+            nextLyric = ""
         }
     }
 }
