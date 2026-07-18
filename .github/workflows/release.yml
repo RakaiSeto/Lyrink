@@ -26,8 +26,7 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        working-directory: app
-        run: npm ci
+        run: cd app && npm ci
 
       - name: Decode keystore
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > lyrink-release.jks || true
