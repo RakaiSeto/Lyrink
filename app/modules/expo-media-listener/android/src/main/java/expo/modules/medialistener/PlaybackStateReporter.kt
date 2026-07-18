@@ -34,6 +34,7 @@ object PlaybackStateReporter {
  private var deviceId: String = ""
  private var webSocket: WebSocket? = null
  private var latestState: MediaMetadata? = null
+ private var lastReportedMetadata: MediaMetadata? = null
  private var reconnectScheduled = false
  private var reconnectAttempt = 0
  var onControlReceived: ((action: String, position: Long) -> Unit)? = null
@@ -69,14 +70,16 @@ object PlaybackStateReporter {
     webSocket = client.newWebSocket(request, object : WebSocketListener() {
       override fun onOpen(webSocket: WebSocket, response: Response) {
         Log.d(TAG, "WebSocket connected")
+        MediaEventEmitter.emitConnectionStatus(true)
         lock.withLock {
           this@PlaybackStateReporter.webSocket = webSocket
           reconnectScheduled = false
           reconnectAttempt = 0
           sendPairMessage(webSocket)
-          // Flush any buffered state
-          latestState?.let { state ->
-            sendDataMessage(webSocket, state)
+          // Send latest state on reconnect — covers both send-failure buffer and clean reconnect
+          val stateToSend = latestState ?: lastReportedMetadata
+          if (stateToSend != null) {
+            sendDataMessage(webSocket, stateToSend)
             latestState = null
           }
           connectedCondition.signalAll()
@@ -104,11 +107,13 @@ object PlaybackStateReporter {
 
       override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
         Log.d(TAG, "WebSocket closed: $code $reason")
+        MediaEventEmitter.emitConnectionStatus(false)
         scheduleReconnect()
       }
 
       override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
         Log.e(TAG, "WebSocket failure", t)
+        MediaEventEmitter.emitConnectionStatus(false)
         scheduleReconnect()
       }
     })
@@ -146,6 +151,7 @@ object PlaybackStateReporter {
       put("type", "pair")
       put("code", code)
       put("deviceId", getOrCreateDeviceId())
+      put("clientType", "phone")
     }
     ws.send(json.toString())
     Log.d(TAG, "Sent pair message")
@@ -157,8 +163,7 @@ object PlaybackStateReporter {
       put("title", metadata.title ?: JSONObject.NULL)
       put("artist", metadata.artist ?: JSONObject.NULL)
       put("album", metadata.album ?: JSONObject.NULL)
-      put("albumArtBase64", metadata.albumArtBase64 ?: JSONObject.NULL)
-      put("timestamp", System.currentTimeMillis())
+      put("timestamp", metadata.capturedAtMs)
       put("position", metadata.playbackPosition)
       put("duration", metadata.duration)
       put("isPlaying", metadata.isPlaying)
@@ -174,6 +179,7 @@ object PlaybackStateReporter {
   fun report(metadata: MediaMetadata) {
     try {
       lock.withLock {
+        lastReportedMetadata = metadata
         val ws = webSocket
         if (ws != null) {
           sendDataMessage(ws, metadata)

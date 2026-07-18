@@ -12,6 +12,7 @@ import {
   stopForegroundService,
   isForegroundServiceRunning,
   sendControl,
+  addWsConnectionStatusListener,
 } from '../../modules/expo-media-listener/src/index';
 
 import type { MediaMetadata } from '../../modules/expo-media-listener/src/types';
@@ -19,6 +20,7 @@ import type { MediaMetadata } from '../../modules/expo-media-listener/src/types'
 export function useMediaMetadata() {
   const [metadata, setMetadata] = useState<MediaMetadata | null>(null);
   const [permissionGranted, setPermissionGranted] = useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
   const [serviceRunning, setServiceRunning] = useState(false);
 
   useEffect(() => {
@@ -38,8 +40,13 @@ export function useMediaMetadata() {
       setMetadata(data);
     });
 
+    const removeWsListener = addWsConnectionStatusListener((status) => {
+      setWsConnected(status.connected);
+    });
+
     return () => {
       removeListener();
+      removeWsListener();
       stopListening();
     };
   }, []);
@@ -77,6 +84,7 @@ export function useMediaMetadata() {
     permissionGranted,
     isListening: Platform.OS === 'android' && permissionGranted,
     serviceRunning,
+    wsConnected,
     openSettings,
     refresh,
     toggleService,
