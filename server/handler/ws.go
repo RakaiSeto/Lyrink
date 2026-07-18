@@ -89,6 +89,9 @@ func (c *Client) readPump(hub *Hub) {
 	c.deviceId = pairMsg.DeviceId
 	c.clientType = pairMsg.ClientType
 
+	// Notify hub that pairing is complete — triggers phone status broadcast
+	hub.RoutePairDone(c)
+
 	// Subsequent messages
 	for {
 		_, raw, err := c.conn.ReadMessage()
@@ -112,6 +115,7 @@ func (c *Client) readPump(hub *Hub) {
 		}
 	}
 }
+
 func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
