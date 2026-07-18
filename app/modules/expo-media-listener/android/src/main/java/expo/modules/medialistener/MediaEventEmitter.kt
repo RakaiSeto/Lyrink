@@ -11,6 +11,7 @@ data class MediaMetadata(
   val rawNotificationJson: String? = null,
   val duration: Long = 0L,
   val playbackPosition: Long = 0L,
+  val capturedAtMs: Long = System.currentTimeMillis(),
   val playbackState: String? = null,
   val rawPlaybackStateJson: String? = null
 )
@@ -18,6 +19,7 @@ data class MediaMetadata(
 object MediaEventEmitter {
   private val metadataListeners = mutableListOf<(MediaMetadata) -> Unit>()
   private val statusListeners = mutableListOf<(Boolean) -> Unit>()
+  private val connectionStatusListeners = mutableListOf<(Boolean) -> Unit>()
 
   fun addMetadataListener(listener: (MediaMetadata) -> Unit) {
     metadataListeners.add(listener)
@@ -41,5 +43,17 @@ object MediaEventEmitter {
 
   fun emitListeningStatus(isListening: Boolean) {
     statusListeners.forEach { it(isListening) }
+  }
+
+  fun addConnectionStatusListener(listener: (Boolean) -> Unit) {
+    connectionStatusListeners.add(listener)
+  }
+
+  fun removeConnectionStatusListener(listener: (Boolean) -> Unit) {
+    connectionStatusListeners.remove(listener)
+  }
+
+  fun emitConnectionStatus(connected: Boolean) {
+    connectionStatusListeners.forEach { it(connected) }
   }
 }

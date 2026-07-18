@@ -17,6 +17,10 @@ export type ListeningStatus = {
   isListening: boolean;
 };
 
+export type WsConnectionStatus = {
+  connected: boolean;
+};
+
 export type NativeEventPayload = Record<string, unknown>;
 
 export type ModuleDefinition = {

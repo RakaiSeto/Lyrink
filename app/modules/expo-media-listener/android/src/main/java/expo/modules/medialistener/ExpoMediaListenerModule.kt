@@ -19,11 +19,12 @@ class ExpoMediaListenerModule : Module() {
 
   private var metadataCallback: ((MediaMetadata) -> Unit)? = null
   private var statusCallback: ((Boolean) -> Unit)? = null
+  private var connectionStatusCallback: ((Boolean) -> Unit)? = null
 
   override fun definition() = ModuleDefinition {
     Name("ExpoMediaListener")
 
-    Events("onMediaMetadataChanged", "onListeningStatusChanged")
+    Events("onMediaMetadataChanged", "onListeningStatusChanged", "onWsConnectionStatusChanged")
 
     Function("startListening") {
       val intent = Intent(context, MediaNotificationListenerService::class.java)
@@ -160,6 +161,11 @@ class ExpoMediaListenerModule : Module() {
         sendEvent("onListeningStatusChanged", mapOf("isListening" to isListening))
       }
       statusCallback?.let { MediaEventEmitter.addStatusListener(it) }
+
+      connectionStatusCallback = { connected ->
+        sendEvent("onWsConnectionStatusChanged", mapOf("connected" to connected))
+      }
+      connectionStatusCallback?.let { MediaEventEmitter.addConnectionStatusListener(it) }
     }
 
     OnDestroy {
@@ -167,6 +173,8 @@ class ExpoMediaListenerModule : Module() {
       metadataCallback = null
       statusCallback?.let { MediaEventEmitter.removeStatusListener(it) }
       statusCallback = null
+      connectionStatusCallback?.let { MediaEventEmitter.removeConnectionStatusListener(it) }
+      connectionStatusCallback = null
     }
   }
 

@@ -39,7 +39,7 @@ function formatTime(ms: number): string {
 }
 
 function NowPlayingCard() {
-  const { metadata, permissionGranted, openSettings, isListening, serviceRunning, toggleService, sendControl } =
+  const { metadata, permissionGranted, openSettings, isListening, serviceRunning, wsConnected, toggleService, sendControl } =
     useMediaMetadata();
 
   const [displayPosition, setDisplayPosition] = useState(0);
@@ -104,9 +104,9 @@ function NowPlayingCard() {
     <ThemedView type="backgroundElement" style={styles.nowPlayingCard}>
       <ThemedView style={styles.serviceRow}>
         <ThemedView style={styles.serviceStatus}>
-          <ThemedView style={[styles.statusDot, serviceRunning && styles.statusDotActive]} />
+          <ThemedView style={[styles.statusDot, (serviceRunning && wsConnected) && styles.statusDotActive]} />
           <ThemedText type="small" style={styles.serviceLabel}>
-            {serviceRunning ? 'Active' : 'Inactive'}
+            {(serviceRunning && wsConnected) ? 'Active' : serviceRunning ? 'Connecting...' : 'Inactive'}
           </ThemedText>
         </ThemedView>
         <Pressable

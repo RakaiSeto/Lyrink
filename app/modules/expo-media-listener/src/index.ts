@@ -1,10 +1,10 @@
 import { EventEmitter, Platform } from 'expo-modules-core';
 import ExpoMediaListener from './ExpoMediaListener';
-import type { MediaMetadata, ListeningStatus } from './types';
+import type { MediaMetadata, ListeningStatus, WsConnectionStatus } from './types';
 
 const emitter = new EventEmitter(ExpoMediaListener);
 
-export type { MediaMetadata, ListeningStatus };
+export type { MediaMetadata, ListeningStatus, WsConnectionStatus };
 
 export function startListening(): void {
   if (Platform.OS !== 'android') return;
@@ -75,6 +75,18 @@ export function addListeningStatusListener(
 
   const subscription = emitter.addListener<ListeningStatus>(
     'onListeningStatusChanged',
+    listener
+  );
+  return () => subscription.remove();
+}
+
+export function addWsConnectionStatusListener(
+  listener: (status: WsConnectionStatus) => void
+): () => void {
+  if (Platform.OS !== 'android') return () => {};
+
+  const subscription = emitter.addListener<WsConnectionStatus>(
+    'onWsConnectionStatusChanged',
     listener
   );
   return () => subscription.remove();
