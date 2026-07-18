@@ -16,33 +16,44 @@ import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
 object PlaybackStateReporter {
- private const val TAG = "PlaybackStateReporter"
- private const val WS_URL = "wss://api-lyrink.rakaiseto.com/ws"
- private const val RECONNECT_DELAY_MS = 3000L
- private const val MAX_RECONNECT_DELAY_MS = 60_000L
+  private const val TAG = "PlaybackStateReporter"
+  private const val WS_URL = "wss://api-lyrink.rakaiseto.com/ws"
+  private const val RECONNECT_DELAY_MS = 3000L
+  private const val MAX_RECONNECT_DELAY_MS = 60_000L
 
- private val client = OkHttpClient.Builder()
+  private val client = OkHttpClient.Builder()
     .connectTimeout(10, TimeUnit.SECONDS)
     .readTimeout(0, TimeUnit.SECONDS) // no read timeout for WS
     .pingInterval(30, TimeUnit.SECONDS) // client-initiated keepalive
     .build()
 
- private val lock = ReentrantLock()
- private val connectedCondition = lock.newCondition()
+  private val lock = ReentrantLock()
+  private val connectedCondition = lock.newCondition()
 
- private var prefs: SharedPreferences? = null
- private var deviceId: String = ""
- private var webSocket: WebSocket? = null
- private var latestState: MediaMetadata? = null
- private var lastReportedMetadata: MediaMetadata? = null
- private var reconnectScheduled = false
- private var reconnectAttempt = 0
- var onControlReceived: ((action: String, position: Long) -> Unit)? = null
+  private var prefs: SharedPreferences? = null
+  private var deviceId: String = ""
+  private var webSocket: WebSocket? = null
+  private var latestState: MediaMetadata? = null
+  private var lastReportedMetadata: MediaMetadata? = null
+  private var reconnectScheduled = false
+  private var reconnectAttempt = 0
+  var onControlReceived: ((action: String, position: Long) -> Unit)? = null
 
- fun init(context: Context) {
+  fun init(context: Context) {
     prefs = context.getSharedPreferences("lyrink_prefs", Context.MODE_PRIVATE)
     getOrCreateDeviceId()
     connect()
+  }
+
+  fun disconnect() {
+    lock.withLock {
+      reconnectScheduled = true
+      webSocket?.close(1000, "service stopped")
+      webSocket = null
+      latestState = null
+      lastReportedMetadata = null
+    }
+    Log.d(TAG, "Disconnected")
   }
 
   private fun getOrCreateDeviceId(): String {
@@ -136,6 +147,7 @@ object PlaybackStateReporter {
       } catch (_: InterruptedException) {
         return@Thread
       }
+      lock.withLock { reconnectScheduled = false }
       Log.d(TAG, "Reconnecting (attempt $reconnectAttempt, delay ${delay}ms)...")
       connect()
     }.also { it.isDaemon = true; it.start() }
@@ -163,6 +175,7 @@ object PlaybackStateReporter {
       put("title", metadata.title ?: JSONObject.NULL)
       put("artist", metadata.artist ?: JSONObject.NULL)
       put("album", metadata.album ?: JSONObject.NULL)
+      put("albumArtBase64", metadata.albumArtBase64 ?: JSONObject.NULL)
       put("timestamp", metadata.capturedAtMs)
       put("position", metadata.playbackPosition)
       put("duration", metadata.duration)

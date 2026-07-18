@@ -23,12 +23,14 @@ type Hub struct {
 	broadcast  chan []byte
 	register   chan *Client
 	unregister chan *Client
+	pairDone   chan *Client
 }
 
 type dataMessage struct {
 	senderCode string
 	body       []byte
 }
+
 func NewHub() *Hub {
 	return &Hub{
 		clients:    make(map[*Client]bool),
@@ -37,6 +39,7 @@ func NewHub() *Hub {
 		broadcast:  make(chan []byte, 256),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
+		pairDone:   make(chan *Client), // new: signal after pairing completes
 	}
 }
 
@@ -47,15 +50,18 @@ func (h *Hub) Run() {
 			h.clients[client] = true
 			log.Printf("ws client connected (code=%q deviceId=%q), total: %d",
 				client.code, client.deviceId, len(h.clients))
-			h.broadcastPhoneStatus(client.code)
 
 		case client := <-h.unregister:
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
 				close(client.send)
-			} 
+			}
 			log.Printf("ws client disconnected (code=%q deviceId=%q), total: %d",
 				client.code, client.deviceId, len(h.clients))
+			h.broadcastPhoneStatus(client.code)
+
+		case client := <-h.pairDone:
+			log.Printf("ws client paired (code=%q deviceId=%q clientType=%q)", client.code, client.deviceId, client.clientType)
 			h.broadcastPhoneStatus(client.code)
 
 		case dm := <-h.data:
@@ -65,46 +71,12 @@ func (h *Hub) Run() {
 			}
 			for client := range h.clients {
 				if client.code == dm.senderCode && client != nil {
-				select {
-				case client.send <- dm.body:
-				default:
-					log.Printf("hub: send buffer full, dropping data for code=%q", client.code)
-				}
-				}
-			}
-
-		case message := <-h.control:
-			var msg struct {
-				DeviceId string `json:"deviceId"`
-			}
-			if err := json.Unmarshal(message, &msg); err != nil {
-				log.Printf("hub: failed to parse deviceId: %v", err)
-				continue
-			}
-			for client := range h.clients {
-				if client.deviceId == msg.DeviceId {
-				select {
-				case client.send <- message:
-				default:
-					log.Printf("hub: send buffer full, dropping control for deviceId=%q", msg.DeviceId)
-				}
-					break
-				}
-			}
-			log.Printf("ws client disconnected, total: %d", len(h.clients))
-
-		case dm := <-h.data:
-			if dm.senderCode == "" {
-				log.Printf("hub: data message from unpaired client, ignoring")
-				continue
-			}
-			for client := range h.clients {
-				if client.code == dm.senderCode && client != nil {
-				select {
-				case client.send <- dm.body:
-				default:
-					log.Printf("hub: send buffer full, dropping data for code=%q", client.code)
-				}
+					select {
+					case client.send <- dm.body:
+						log.Printf("hub: forwarded data to code=%q (%d bytes)", client.code, len(dm.body))
+					default:
+						log.Printf("hub: send buffer full, dropping data for code=%q", client.code)
+					}
 				}
 			}
 
@@ -118,22 +90,23 @@ func (h *Hub) Run() {
 			}
 			for client := range h.clients {
 				if client.deviceId == msg.DeviceId {
-				select {
-				case client.send <- message:
-				default:
-					log.Printf("hub: send buffer full, dropping control for deviceId=%q", msg.DeviceId)
-				}
+					select {
+					case client.send <- message:
+						log.Printf("hub: forwarded control to deviceId=%q", msg.DeviceId)
+					default:
+						log.Printf("hub: send buffer full, dropping control for deviceId=%q", msg.DeviceId)
+					}
 					break
 				}
 			}
 
 		case message := <-h.broadcast:
 			for client := range h.clients {
-			select {
-			case client.send <- message:
-			default:
-				log.Printf("hub: send buffer full, dropping broadcast message")
-			}
+				select {
+				case client.send <- message:
+				default:
+					log.Printf("hub: send buffer full, dropping broadcast message")
+				}
 			}
 		}
 	}
@@ -145,6 +118,10 @@ func (h *Hub) RouteData(senderCode string, body []byte) {
 
 func (h *Hub) RouteControl(deviceId string, body []byte) {
 	h.control <- body
+}
+
+func (h *Hub) RoutePairDone(client *Client) {
+	h.pairDone <- client
 }
 
 func (h *Hub) broadcastPhoneStatus(code string) {
@@ -163,6 +140,7 @@ func (h *Hub) broadcastPhoneStatus(code string) {
 		log.Printf("hub: failed to marshal phone status: %v", err)
 		return
 	}
+	log.Printf("hub: broadcasting phone status for code=%q (connected=%v)", code, phoneConnected)
 	for client := range h.clients {
 		if client.code == code && client.clientType == "widget" {
 			select {

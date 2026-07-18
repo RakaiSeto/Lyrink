@@ -12,7 +12,7 @@ import (
 
 const (
 	writeWait      = 10 * time.Second
-	pongWait       = 60 * time.Second
+	pongWait       = 20 * time.Second
 	pingPeriod     = (pongWait * 9) / 10
 	maxMessageSize = 524288 // 512KB — temp: album art base64 can exceed 64KB; migrate art to HTTP later
 )
@@ -89,6 +89,9 @@ func (c *Client) readPump(hub *Hub) {
 	c.deviceId = pairMsg.DeviceId
 	c.clientType = pairMsg.ClientType
 
+	// Notify hub that pairing is complete — triggers phone status broadcast
+	hub.RoutePairDone(c)
+
 	// Subsequent messages
 	for {
 		_, raw, err := c.conn.ReadMessage()
@@ -112,6 +115,7 @@ func (c *Client) readPump(hub *Hub) {
 		}
 	}
 }
+
 func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {

@@ -203,13 +203,31 @@ PlasmoidItem {
                     Item { Layout.fillWidth: true }
                 }
 
-                Image {
-                    source: root.albumArtBase64.length > 0 ? getAlbumArtSource(root.albumArtBase64) : ""
+                Item {
                     Layout.preferredWidth: 200
                     Layout.preferredHeight: 200
                     Layout.alignment: Qt.AlignHCenter
-                    fillMode: Image.PreserveAspectFit
-                    visible: root.albumArtBase64.length > 0
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 8
+                        color: "#252525"
+                        visible: root.albumArtBase64.length === 0
+
+                        PlasmaComponents.Label {
+                            anchors.centerIn: parent
+                            text: "\u266A"
+                            font.pointSize: 64
+                            opacity: 0.2
+                        }
+                    }
+
+                    Image {
+                        anchors.fill: parent
+                        source: root.albumArtBase64.length > 0 ? getAlbumArtSource(root.albumArtBase64) : ""
+                        fillMode: Image.PreserveAspectFit
+                        visible: root.albumArtBase64.length > 0
+                    }
                 }
 
                 Item {
@@ -240,7 +258,7 @@ PlasmoidItem {
                     Layout.fillWidth: true
                     Layout.leftMargin: 8
                     Layout.rightMargin: 8
-                    visible: root.trackDuration > 0
+                    visible: root.trackDuration > 0 || root.trackTitle.length === 0
 
 
                     PlasmaComponents.Label {
@@ -369,6 +387,16 @@ PlasmoidItem {
                         visible: root.lyricsData.length > 0 && root.currentLyric.length === 0 && !root.isLoadingLyrics && root.errorMessage.length === 0
                         opacity: 0.6
                         font.pointSize: 24
+                        horizontalAlignment: Text.AlignHCenter
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    PlasmaComponents.Label {
+                        text: "No song yet"
+                        visible: root.trackTitle.length === 0 
+                        opacity: 0.4
+                        font.pointSize: 14
                         horizontalAlignment: Text.AlignHCenter
                         anchors.horizontalCenter: parent.horizontalCenter
                         anchors.verticalCenter: parent.verticalCenter
