@@ -16,33 +16,44 @@ import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
 object PlaybackStateReporter {
- private const val TAG = "PlaybackStateReporter"
- private const val WS_URL = "wss://api-lyrink.rakaiseto.com/ws"
- private const val RECONNECT_DELAY_MS = 3000L
- private const val MAX_RECONNECT_DELAY_MS = 60_000L
+  private const val TAG = "PlaybackStateReporter"
+  private const val WS_URL = "wss://api-lyrink.rakaiseto.com/ws"
+  private const val RECONNECT_DELAY_MS = 3000L
+  private const val MAX_RECONNECT_DELAY_MS = 60_000L
 
- private val client = OkHttpClient.Builder()
+  private val client = OkHttpClient.Builder()
     .connectTimeout(10, TimeUnit.SECONDS)
     .readTimeout(0, TimeUnit.SECONDS) // no read timeout for WS
     .pingInterval(30, TimeUnit.SECONDS) // client-initiated keepalive
     .build()
 
- private val lock = ReentrantLock()
- private val connectedCondition = lock.newCondition()
+  private val lock = ReentrantLock()
+  private val connectedCondition = lock.newCondition()
 
- private var prefs: SharedPreferences? = null
- private var deviceId: String = ""
- private var webSocket: WebSocket? = null
- private var latestState: MediaMetadata? = null
- private var lastReportedMetadata: MediaMetadata? = null
- private var reconnectScheduled = false
- private var reconnectAttempt = 0
- var onControlReceived: ((action: String, position: Long) -> Unit)? = null
+  private var prefs: SharedPreferences? = null
+  private var deviceId: String = ""
+  private var webSocket: WebSocket? = null
+  private var latestState: MediaMetadata? = null
+  private var lastReportedMetadata: MediaMetadata? = null
+  private var reconnectScheduled = false
+  private var reconnectAttempt = 0
+  var onControlReceived: ((action: String, position: Long) -> Unit)? = null
 
- fun init(context: Context) {
+  fun init(context: Context) {
     prefs = context.getSharedPreferences("lyrink_prefs", Context.MODE_PRIVATE)
     getOrCreateDeviceId()
     connect()
+  }
+
+  fun disconnect() {
+    lock.withLock {
+      reconnectScheduled = true
+      webSocket?.close(1000, "service stopped")
+      webSocket = null
+      latestState = null
+      lastReportedMetadata = null
+    }
+    Log.d(TAG, "Disconnected")
   }
 
   private fun getOrCreateDeviceId(): String {

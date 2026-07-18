@@ -65,6 +65,7 @@ class LyrinkForegroundService : Service() {
     metadataListener = null
     currentSongTitle = null
     isRunning = false
+    PlaybackStateReporter.disconnect()
     try {
       stopForeground(STOP_FOREGROUND_REMOVE)
     } catch (e: Exception) {
